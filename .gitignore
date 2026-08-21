@@ -1,0 +1,45 @@
+# macOS
+.DS_Store
+._*
+
+# Xcode
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.xcarchive
+*.dmg
+*.pkg
+*.profraw
+.swiftpm/
+Packages/
+.build/
+timeline.xctimeline
+playground.xcworkspace
+
+# Secrets / local config
+*.env
+.env.*
+*.mobileprovision
+*.p12
+*.cer
+ExportOptions*.local.plist
+
+# Logs & temp
+*.log
+*.tmp
+*.orig
+*.swp
+*~
+
+# Web
+node_modules/
+
+# Local tooling
+.claude/

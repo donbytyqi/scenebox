@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyCWVZzf85Fw2LlMwWsJf8l1qSxSCQBpB2s</string>
+	<key>GCM_SENDER_ID</key>
+	<string>90704681191</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>app.scenebox.SceneBox</string>
+	<key>PROJECT_ID</key>
+	<string>watchbox-8869b</string>
+	<key>STORAGE_BUCKET</key>
+	<string>watchbox-8869b.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:90704681191:ios:a4d395f22a845c56bf2a42</string>
+</dict>
+</plist>

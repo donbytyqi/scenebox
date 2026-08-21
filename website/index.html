@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SceneBox: stream, download and keep your place, on every screen</title>
+  <meta name="description" content="SceneBox is a media player for iPhone, iPad, Apple TV and Mac that streams releases from Stremio-compatible sources, downloads for offline, and keeps your progress in sync.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="#">SceneBox</a>
+  <nav>
+    <a href="#features">Features</a>
+    <a href="#platforms">Platforms</a>
+    <a href="#pricing">Pricing</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+</header>
+
+<main>
+
+  <section class="hero">
+    <h1>Watch movies and shows on your iPhone, Apple TV and Mac. One app, one account.</h1>
+    <p class="lede">
+      Search for a title, press Watch, and SceneBox pulls it from the sources you set up
+      and starts playing. It keeps track of where you stopped, so you can carry on from
+      any of your devices. Download things for offline. Subtitles in your language by default.
+    </p>
+    <p class="cta">
+      <a class="button" href="#download">Download for Mac</a>
+      <a class="button secondary" href="#features">What it does</a>
+    </p>
+    <figure class="shot">
+      <img src="images/mac-detail.png" alt="SceneBox on the Mac: a title's page with Resume, Download, the synopsis and the episode shelf" width="1600" height="1000">
+      <figcaption>The Mac app. The iPhone and Apple TV apps look the same and share the account.</figcaption>
+    </figure>
+  </section>
+
+  <section id="features">
+    <h2>What it does</h2>
+
+    <dl class="features">
+      <dt>Search and watch</dt>
+      <dd>Type a name. Movies, shows and anime come back in one list with the closest match first. Open one, press Watch, and SceneBox asks your sources (Torrentio or any other Stremio addon) for releases. Either it picks the best one for you or you choose from the list by quality, size and seeders.</dd>
+
+      <dt>Debrid</dt>
+      <dd>If you have a Real-Debrid account, add the key and cached releases play as a normal download at full speed. No peers involved. The key lives in the Keychain, and it only goes to community-run servers if you turn that on yourself.</dd>
+
+      <dt>Downloads</dt>
+      <dd>Save a movie or an episode to the device and watch it with no connection. Downloads pick up where they left off after a restart. You can cap how much space they use, restrict them to Wi-Fi, and subtitles are fetched at download time so they are there offline too.</dd>
+
+      <dt>Continue Watching</dt>
+      <dd>Sign in with an email and your progress, watchlist and settings follow you. Stop an episode on the iPad and the Apple TV offers to resume it. Finished episodes get a checkmark and the Watch button moves on to the next one you haven't seen.</dd>
+
+      <dt>Subtitles and audio</dt>
+      <dd>Subtitles come from the file itself when it has them, otherwise from OpenSubtitles, in your language by default. Audio defaults to your language when the title was made in it. A French film stays French unless you switch it.</dd>
+
+      <dt>Apple TV</dt>
+      <dd>Not a phone app blown up. A title's page fits on one screen: artwork behind, description and buttons on the left, episodes or cast in a row along the bottom. Move onto an episode and its full description shows up next to it.</dd>
+
+      <dt>Mac</dt>
+      <dd>Space to pause, arrow keys to skip, F for full screen, Esc to close. The cursor gets out of the way while you watch. Rows have arrows for scrolling with a mouse. Runs on Apple silicon and Intel.</dd>
+
+      <dt>Trailers, similar titles, cast</dt>
+      <dd>Title pages have a Trailer button (opens YouTube on iPhone, iPad and Mac) and a row of similar titles. Add a free TMDB key and you also get the full cast with photos, and you can tap an actor to see what else they've been in.</dd>
+
+      <dt>Links</dt>
+      <dd>Open a <code>magnet:</code> link from Safari or any other app and SceneBox plays it. <code>scenebox://detail/movie/tt0133093</code> jumps straight to a title.</dd>
+    </dl>
+  </section>
+
+  <section id="platforms">
+    <h2>Platforms</h2>
+    <table>
+      <tr><th>iPhone &amp; iPad</th><td>iOS 18 or later.</td></tr>
+      <tr><th>Apple TV</th><td>tvOS 18 or later.</td></tr>
+      <tr><th>Mac</th><td>macOS 15 Sequoia or later, Apple silicon and Intel. Downloaded from this page; signed and notarised by Apple.</td></tr>
+    </table>
+    <p class="note">One account for all of them. Keys, settings, watchlist and progress sync. Downloads stay on the device you made them on.</p>
+    <h3>Coming soon</h3>
+    <p>Windows, Linux, Android and Android TV are being worked on. Same account, same sync. <a href="mailto:spontaneousarray@gmail.com?subject=Tell%20me%20when%20SceneBox%20ships%20on%20other%20platforms">Email us</a> if you want to know when they're ready.</p>
+  </section>
+
+  <section id="pricing">
+    <h2>Pricing</h2>
+    <div class="price">
+      <p class="amount">Free</p>
+      <p>SceneBox is free. No ads, no account tiers, no in-app purchases.</p>
+      <p class="fine">Debrid services and TMDB are optional third-party accounts with their own pricing; SceneBox works without them.</p>
+    </div>
+  </section>
+
+  <section id="download">
+    <h2>Download</h2>
+    <p>
+      <a class="button" href="SceneBox-1.0.0.dmg">SceneBox for Mac (.dmg)</a>
+    </p>
+    <p class="note">Open the disk image, drag SceneBox into Applications, sign in with an email. Needs macOS 15 or later. For the iPhone, iPad and Apple TV builds, <a href="mailto:spontaneousarray@gmail.com?subject=SceneBox%20for%20iPhone%2C%20iPad%20and%20Apple%20TV">email us</a>.</p>
+  </section>
+
+  <section id="faq">
+    <h2>Questions</h2>
+
+    <h3>Where does the video come from?</h3>
+    <p>From sources you set up yourself: Stremio addons like Torrentio and StremThru. Playback is peer to peer, or a direct download from your debrid provider if you have one. SceneBox doesn't host anything and has no catalogue of its own. Titles, artwork and episode lists come from Cinemeta, Kitsu and TMDB.</p>
+
+    <h3>Is my IP visible?</h3>
+    <p>With peer-to-peer streaming, yes, the same as any torrent client: the peers you connect to see your IP. Use a VPN if you care about that, or a debrid service, which fetches on your behalf. Settings says the same thing.</p>
+
+    <h3>Where are my API keys stored?</h3>
+    <p>In the Keychain. They sync to your account so your other devices get them. Community-run source servers only see them if you turn that on.</p>
+
+    <h3>Does it work offline?</h3>
+    <p>Anything you've downloaded plays offline, subtitles included. Browsing needs a connection.</p>
+
+    <h3>Which formats play?</h3>
+    <p>Pretty much anything. Playback is libVLC: MKV, MP4, AVI, HEVC, multiple audio tracks, embedded and external subtitles.</p>
+
+    <h3>How is it installed?</h3>
+    <p>Download the Mac app from this page. It's signed and notarised by Apple, so it opens like anything else you download, no warnings. The iPhone, iPad and Apple TV builds are handed out directly; email us.</p>
+  </section>
+
+</main>
+
+<footer>
+  <p>SceneBox is an independent app. It is not affiliated with Torrentio, Stremio, Real-Debrid, TMDB or VideoLAN. Uses the TMDB API but is not endorsed or certified by TMDB.</p>
+  <p><a href="mailto:spontaneousarray@gmail.com">spontaneousarray@gmail.com</a> · <a href="mailto:spontaneousarray@gmail.com">feature requests</a></p>
+</footer>
+
+</body>
+</html>

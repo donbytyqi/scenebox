@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "front@1x.png",
+      "idiom" : "tv"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

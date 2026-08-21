@@ -1,0 +1,46 @@
+rules_version = '2';
+
+// users/{uid}/settings/apiKeys
+// users/{uid}/profiles/{profileID}/{watching,watchlist}/{mediaID}
+// users/{uid}/{watching,watchlist}/{mediaID}   (legacy, pre-profiles)
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      function isOwner() {
+        return request.auth != null && request.auth.uid == uid;
+      }
+
+      match /profiles/{profileID} {
+        function validProfile(p) {
+          return p.keys().hasAll(['id', 'name', 'colorIndex', 'createdAt'])
+            && p.id is string && p.id == profileID
+            && p.name is string && p.name.size() >= 1 && p.name.size() <= 24
+            && p.colorIndex is int && p.colorIndex >= 0 && p.colorIndex < 4
+            && (!('avatarURLString' in p) || p.avatarURLString == null
+                || (p.avatarURLString is string && p.avatarURLString.size() < 2048));
+        }
+
+        allow read, delete: if isOwner();
+        allow create, update: if isOwner() && validProfile(request.resource.data);
+
+        match /{document=**} {
+          allow read, write: if isOwner();
+        }
+      }
+
+      // No wildcard here: it would also match profiles/* and bypass validProfile.
+      match /settings/{doc} {
+        allow read, write: if isOwner();
+      }
+      match /watching/{doc} {
+        allow read, write: if isOwner();
+      }
+      match /watchlist/{doc} {
+        allow read, write: if isOwner();
+      }
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
