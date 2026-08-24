@@ -55,7 +55,7 @@ final class WatchProgressStore {
 
     func record(id: String, mediaType: MediaType, title: String, posterURL: URL?,
                 season: Int?, episode: Int?, episodeID: String?,
-                position: Duration, duration: Duration?) {
+                position: Duration, duration: Duration?, source: WatchSource? = nil) {
         let pos = position.asSeconds
         guard pos >= minRecordSeconds else { return }
 
@@ -64,7 +64,8 @@ final class WatchProgressStore {
             posterURLString: posterURL?.absoluteString,
             season: season, episode: episode, episodeID: episodeID,
             positionSeconds: pos, durationSeconds: duration?.asSeconds ?? 0,
-            updatedAt: Date())
+            updatedAt: Date(),
+            lastSource: source ?? progress(for: id)?.lastSource)
 
         if item.isFinished {
             TraktSync.shared.playbackFinished(id: id, mediaType: mediaType,

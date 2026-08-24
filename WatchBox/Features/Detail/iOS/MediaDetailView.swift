@@ -408,7 +408,8 @@ struct MediaDetailView: View {
         let progressContext = WatchProgressContext(
             mediaID: mediaID, mediaType: type, title: name,
             posterURL: detail?.posterURL,
-            season: episode?.season, episode: episode?.episode, episodeID: episode?.id)
+            season: episode?.season, episode: episode?.episode, episodeID: episode?.id,
+            source: WatchSource(stream: stream))
 
         if stream.isDebrid, let url = stream.url {
             streamer.playDebrid(url: url, title: label, backdropURL: backdrop, logoURL: logo,

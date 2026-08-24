@@ -15,4 +15,5 @@ nonisolated struct WatchProgressContext: Sendable, Equatable {
     let season: Int?
     let episode: Int?
     let episodeID: String?
+    var source: WatchSource? = nil
 }

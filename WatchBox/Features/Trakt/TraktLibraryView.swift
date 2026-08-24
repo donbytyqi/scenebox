@@ -34,7 +34,7 @@ struct TraktLibrarySection: View {
             }
             Button("Not Now", role: .cancel) {}
         } message: {
-            Text("Your watchlist and watched history will be sent to your Trakt account and kept in sync. Anime from Kitsu can't be synced — it has no IMDb id.")
+            Text("Your watchlist and watched history will be sent to your Trakt account and kept in sync. Anime from Kitsu can't be synced because it has no IMDb id.")
         }
         #if os(tvOS)
         .sheet(isPresented: $showConnect) {

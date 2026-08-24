@@ -337,7 +337,7 @@ struct PlaybackScreen: View {
                 id: progress.mediaID, mediaType: progress.mediaType, title: progress.title,
                 posterURL: progress.posterURL, season: progress.season,
                 episode: progress.episode, episodeID: progress.episodeID,
-                position: knownDuration, duration: knownDuration)
+                position: knownDuration, duration: knownDuration, source: progress.source)
         }
         guard !upNextCancelled, !didAutoAdvance,
               let episodes, let next = episodes.next else { return }
@@ -529,7 +529,7 @@ struct PlaybackScreen: View {
             id: progress.mediaID, mediaType: progress.mediaType, title: progress.title,
             posterURL: progress.posterURL, season: progress.season,
             episode: progress.episode, episodeID: progress.episodeID,
-            position: player.currentTime, duration: player.duration)
+            position: player.currentTime, duration: player.duration, source: progress.source)
     }
 
     private func teardown() {

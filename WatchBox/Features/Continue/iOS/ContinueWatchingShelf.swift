@@ -10,8 +10,12 @@ import SwiftUI
 
 struct ContinueWatchingShelf: View {
     let items: [WatchProgress]
+    @Environment(AppSettings.self) private var settings
     @Environment(DownloadStore.self) private var downloads
+    @Environment(WatchProgressStore.self) private var progressStore
+    @Environment(WatchlistStore.self) private var watchlist
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var streamer = StreamCoordinator()
 
     private func isDownloaded(_ item: WatchProgress) -> Bool {
         downloads.isDownloaded(mediaID: item.id, episodeLabel: item.downloadEpisodeLabel)
@@ -27,15 +31,23 @@ struct ContinueWatchingShelf: View {
             HorizontalShelfScroller {
                 LazyHStack(alignment: .top, spacing: 12) {
                     ForEach(items) { item in
-                        PosterLink(item: item.mediaResult) {
-                            ContinueWatchingCard(item: item, isDownloaded: isDownloaded(item))
-                                .frame(width: PosterMetrics.shelfWidth(sizeClass))
-                        }
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                WatchProgressStore.shared.remove(id: item.id)
-                            } label: {
-                                Label("Remove", systemImage: "xmark.circle")
+                        let canResume = streamer.canResume(item, downloads: downloads)
+                        let card = ContinueWatchingCard(item: item, isDownloaded: isDownloaded(item),
+                                                        showsPlayBadge: canResume)
+                            .frame(width: PosterMetrics.shelfWidth(sizeClass))
+                        Group {
+                            if canResume {
+                                Button { streamer.resume(item, downloads: downloads) } label: { card }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        PosterLink(item: item.mediaResult) {
+                                            Label("View Details", systemImage: "info.circle")
+                                        }
+                                        removeButton(item)
+                                    }
+                            } else {
+                                PosterLink(item: item.mediaResult) { card }
+                                    .contextMenu { removeButton(item) }
                             }
                         }
                     }
@@ -43,18 +55,36 @@ struct ContinueWatchingShelf: View {
                 .padding(.horizontal, 16)
             }
         }
+        .fullScreenCover(isPresented: Binding(get: { streamer.isPresenting },
+                                              set: { if !$0 { streamer.stop() } })) {
+            StreamPlayerContainer(streamer: streamer)
+                .environment(settings)
+                .environment(downloads)
+                .environment(progressStore)
+                .environment(watchlist)
+        }
+    }
+
+    private func removeButton(_ item: WatchProgress) -> some View {
+        Button(role: .destructive) {
+            WatchProgressStore.shared.remove(id: item.id)
+        } label: {
+            Label("Remove", systemImage: "xmark.circle")
+        }
     }
 }
 
 private struct ContinueWatchingCard: View {
     let item: WatchProgress
     var isDownloaded = false
+    var showsPlayBadge = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             PosterImage(url: item.posterURL)
                 .overlay(alignment: .bottom) { progressBar }
                 .overlay(alignment: .topLeading) { downloadBadge }
+                .overlay(alignment: .topTrailing) { playBadge }
 
             if Platform.isMac {
                 Text(item.title)
@@ -98,6 +128,18 @@ private struct ContinueWatchingCard: View {
                 .font(.caption)
                 .foregroundStyle(.white)
                 .padding(4)
+                .background(.black.opacity(0.55), in: Circle())
+                .padding(6)
+        }
+    }
+
+    @ViewBuilder
+    private var playBadge: some View {
+        if showsPlayBadge {
+            Image(systemName: "play.fill")
+                .font(.caption2)
+                .foregroundStyle(.white)
+                .padding(6)
                 .background(.black.opacity(0.55), in: Circle())
                 .padding(6)
         }

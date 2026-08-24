@@ -212,7 +212,7 @@ struct ProfileView: View {
                     } else if !trakt.isConfigured {
                         Text("Trakt isn't available in this build.")
                     } else if settings.traktConnected {
-                        Text("Sync mirrors your watchlist and watched history to your Trakt account. Anime from Kitsu can't be synced — it has no IMDb id.")
+                        Text("Sync mirrors your watchlist and watched history to your Trakt account. Anime from Kitsu can't be synced because it has no IMDb id.")
                     } else {
                         Text("Sign in with your Trakt account to browse your watchlist, favorites and lists in the Library tab.")
                     }
@@ -399,7 +399,7 @@ struct ProfileView: View {
             }
             Button("Not Now", role: .cancel) {}
         } message: {
-            Text("Your watchlist and watched history will be sent to your Trakt account and kept in sync. Anime from Kitsu can't be synced — it has no IMDb id.")
+            Text("Your watchlist and watched history will be sent to your Trakt account and kept in sync. Anime from Kitsu can't be synced because it has no IMDb id.")
         }
         .alert("Sign out?", isPresented: $confirmSignOut) {
             Button("Sign out", role: .destructive) { auth.signOut() }
