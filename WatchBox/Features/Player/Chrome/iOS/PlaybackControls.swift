@@ -20,6 +20,7 @@ struct PlaybackControls: View {
     var onToggleOrientation: () -> Void = {}
     var onAudioSelected: () -> Void = {}
     var episodes: EpisodePlaylist? = nil
+    var pip: PiPController? = nil
     let onClose: () -> Void
 
     @State private var showSettings = false
@@ -33,6 +34,7 @@ struct PlaybackControls: View {
                        onSettings: { showSettings = true },
                        episodes: episodes,
                        onShowEpisodes: { showEpisodes = true },
+                       pip: pip,
                        onClose: onClose)
                 Spacer(minLength: 0)
                 TransportRow(player: player, isBuffering: isBuffering)
@@ -68,6 +70,7 @@ private struct TopBar: View {
     let onSettings: () -> Void
     var episodes: EpisodePlaylist? = nil
     var onShowEpisodes: () -> Void = {}
+    var pip: PiPController? = nil
     let onClose: () -> Void
 
     var body: some View {
@@ -81,6 +84,12 @@ private struct TopBar: View {
                 .padding(.leading, 4)
 
             Spacer(minLength: 0)
+
+            if let pip, pip.isPossible {
+                Button { pip.toggle() } label: {
+                    icon(pip.isActive ? "pip.exit" : "pip.enter")
+                }
+            }
 
             if let episodes {
                 Button(action: onShowEpisodes) { icon("list.bullet") }

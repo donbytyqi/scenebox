@@ -14,6 +14,7 @@ struct TVDetailView: View {
     let fallbackTitle: String
     let isBusy: Bool
     var cast: [CastMember] = []
+    var ratings: MediaRatings? = nil
     @Binding var selectedSeason: Int
     var resumeEpisode: Episode? = nil
     var watchLabel: String? = nil
@@ -175,9 +176,7 @@ struct TVDetailView: View {
 
     private var metadataChips: some View {
         HStack(spacing: 12) {
-            if let rating = detail.imdbRating {
-                Chip(text: String(format: "%.1f", rating), systemImage: "star.fill", tint: .yellow)
-            }
+            RatingChips(ratings: ratings, fallbackIMDb: detail.imdbRating)
             if let year = detail.year, !year.isEmpty {
                 Chip(text: year, systemImage: "calendar")
             }

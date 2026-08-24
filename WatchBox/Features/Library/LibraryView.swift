@@ -11,6 +11,7 @@ struct LibraryView: View {
     private enum Section: String, CaseIterable, Identifiable {
         case downloads = "Downloads"
         case watchlist = "Watchlist"
+        case trakt = "Trakt"
         var id: String { rawValue }
     }
 
@@ -59,6 +60,7 @@ struct LibraryView: View {
         switch section {
         case .downloads: DownloadsView()
         case .watchlist: WatchlistSection()
+        case .trakt: TraktLibrarySection()
         }
     }
 

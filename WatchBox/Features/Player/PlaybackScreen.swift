@@ -31,6 +31,7 @@ struct PlaybackScreen: View {
     @State private var player = Player()
     #if os(iOS)
     @State private var nowPlaying: NowPlayingController?
+    @State private var pip: PiPController?
     #endif
     @State private var chrome = ChromeVisibility()
     @State private var subs = SubtitlesController()
@@ -53,13 +54,17 @@ struct PlaybackScreen: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
+            #if os(iOS)
+            PiPVideoView(player, controller: $pip, managesAudioSession: false)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+            #else
             VideoView(player)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
-                #if os(tvOS)
                 .allowsHitTesting(false)
                 .focusable(false)
-                #endif
+            #endif
 
             #if os(iOS)
             Color.clear
@@ -110,6 +115,7 @@ struct PlaybackScreen: View {
                     onToggleOrientation: toggleOrientation,
                     onAudioSelected: { originalAudioSatisfied = true },
                     episodes: episodes,
+                    pip: pip,
                     onClose: onClose
                 )
                 .transition(.opacity)
@@ -212,6 +218,11 @@ struct PlaybackScreen: View {
             try? player.seek(to: startAt)
         }
         .onAppear(perform: start)
+        #if os(iOS)
+        .onChange(of: pip, initial: true) { _, controller in
+            controller?.onRestoreUserInterface = { restore in restore(true) }
+        }
+        #endif
         .onChange(of: player.isPlaying) { _, playing in
             ScreenIdle.keepAwake(playing)
             #if os(iOS)

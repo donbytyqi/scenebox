@@ -104,6 +104,48 @@ final class AppSettings {
         didSet { KeychainStore.setString(tmdbAPIKey, for: Key.tmdbAPIKey.rawValue) }
     }
 
+    // MARK: Ratings
+
+    var omdbAPIKey: String = "" {
+        didSet { KeychainStore.setString(omdbAPIKey, for: Key.omdbAPIKey.rawValue) }
+    }
+
+    // MARK: Trakt
+
+    var traktAccessToken: String = "" {
+        didSet { KeychainStore.setString(traktAccessToken, for: Key.traktAccessToken.rawValue) }
+    }
+
+    var traktRefreshToken: String = "" {
+        didSet { KeychainStore.setString(traktRefreshToken, for: Key.traktRefreshToken.rawValue) }
+    }
+
+    var traktTokenExpiry: Double = 0 {
+        didSet { persist(traktTokenExpiry, .traktTokenExpiry) }
+    }
+
+    var traktUsername: String = "" {
+        didSet { persist(traktUsername, .traktUsername) }
+    }
+
+    var traktSyncEnabled = false {
+        didSet { persist(traktSyncEnabled, .traktSyncEnabled) }
+    }
+
+    var traktBackfillUsername: String = "" {
+        didSet { persist(traktBackfillUsername, .traktBackfillUsername) }
+    }
+
+    var traktConnected: Bool { !traktAccessToken.isEmpty }
+
+    func clearTraktSession() {
+        traktAccessToken = ""
+        traktRefreshToken = ""
+        traktTokenExpiry = 0
+        traktUsername = ""
+        traktSyncEnabled = false
+    }
+
     // MARK: Playback
 
     nonisolated static let subtitleScaleOptions: [Double] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0]
@@ -266,6 +308,19 @@ final class AppSettings {
             tmdbAPIKey = stored                                     // → Keychain via didSet
         }
         defaults.removeObject(forKey: Key.tmdbAPIKey.rawValue)
+        if let stored = KeychainStore.string(for: Key.omdbAPIKey.rawValue) {
+            omdbAPIKey = stored
+        }
+        if let stored = KeychainStore.string(for: Key.traktAccessToken.rawValue) {
+            traktAccessToken = stored
+        }
+        if let stored = KeychainStore.string(for: Key.traktRefreshToken.rawValue) {
+            traktRefreshToken = stored
+        }
+        traktTokenExpiry = defaults.double(forKey: Key.traktTokenExpiry.rawValue)
+        traktUsername = defaults.string(forKey: Key.traktUsername.rawValue) ?? ""
+        traktSyncEnabled = defaults.bool(forKey: Key.traktSyncEnabled.rawValue)
+        traktBackfillUsername = defaults.string(forKey: Key.traktBackfillUsername.rawValue) ?? ""
         shareDebridKeyWithCommunitySources = defaults.bool(forKey: Key.shareDebridKeyWithCommunitySources.rawValue)
         if let host = defaults.string(forKey: Key.stremthruHost.rawValue), !host.isEmpty {
             stremthruHost = host
@@ -284,7 +339,9 @@ final class AppSettings {
         case storageCap, streamCacheLimit
         case maxPeers, streamingPort, wifiOnly, customTrackers
         case debridProvider, debridAPIKey, debridAPIKeys
-        case tmdbAPIKey
+        case tmdbAPIKey, omdbAPIKey
+        case traktAccessToken, traktRefreshToken, traktTokenExpiry, traktUsername
+        case traktSyncEnabled, traktBackfillUsername
         case extraSourceProviders
         case autoSelectSource
         case enabledSources

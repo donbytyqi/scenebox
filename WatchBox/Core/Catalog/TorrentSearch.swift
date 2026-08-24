@@ -148,27 +148,22 @@ public actor TorrentSearch {
                 try await Task.sleep(for: .milliseconds(500 * attempt))
             }
 
-            var request = URLRequest(url: url)
-            request.timeoutInterval = timeout
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-            request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
-
             do {
-                var (data, response) = try await URLSession.shared.data(for: request)
-                if let http = response as? HTTPURLResponse, http.statusCode == 403 {
-                    request.setValue(Self.browserUserAgent, forHTTPHeaderField: "User-Agent")
-                    (data, response) = try await URLSession.shared.data(for: request)
+                var response = try await HTTP.get(url, headers: ["User-Agent": Self.userAgent],
+                                                  timeout: timeout, cachePolicy: .reloadIgnoringLocalCacheData)
+                if response.status == 403 {
+                    response = try await HTTP.get(url, headers: ["User-Agent": Self.browserUserAgent],
+                                                  timeout: timeout, cachePolicy: .reloadIgnoringLocalCacheData)
                 }
-                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                    guard (500...599).contains(http.statusCode) || http.statusCode == 429 else {
-                        throw TorrentioError.badStatus(http.statusCode)
+                if !response.isSuccess {
+                    guard (500...599).contains(response.status) || response.status == 429 else {
+                        throw TorrentioError.badStatus(response.status)
                     }
-                    lastError = TorrentioError.badStatus(http.statusCode)
+                    lastError = TorrentioError.badStatus(response.status)
                     continue
                 }
-                guard !data.isEmpty else { lastError = TorrentioError.emptyResponse; continue }
-                guard let object = try? JSONSerialization.jsonObject(with: data),
-                      let json = object as? [String: Any] else {
+                guard !response.data.isEmpty else { lastError = TorrentioError.emptyResponse; continue }
+                guard let json = response.object else {
                     lastError = TorrentioError.notJSON
                     continue
                 }

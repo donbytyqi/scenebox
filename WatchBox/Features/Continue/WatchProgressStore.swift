@@ -66,6 +66,11 @@ final class WatchProgressStore {
             positionSeconds: pos, durationSeconds: duration?.asSeconds ?? 0,
             updatedAt: Date())
 
+        if item.isFinished {
+            TraktSync.shared.playbackFinished(id: id, mediaType: mediaType,
+                                              season: mediaType == .movie ? nil : season,
+                                              episode: mediaType == .movie ? nil : episode)
+        }
         if item.isFinished, item.mediaType == .movie {
             remove(id: id)
             return
@@ -122,6 +127,9 @@ final class WatchProgressStore {
         }
         item.watchedEpisodes = set.sorted()
         item.updatedAt = Date()
+
+        TraktSync.shared.episodeSetWatched(watched, id: mediaID,
+                                           season: episode.season, episode: episode.episode)
 
         if set.isEmpty, item.positionSeconds <= 0 {
             remove(id: mediaID)

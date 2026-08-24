@@ -61,6 +61,7 @@ final class CloudSettingsSync {
         let debridAPIKeys: [String: String]?
         let debridProvider: String?
         let tmdbAPIKey: String?
+        let omdbAPIKey: String?
         let preferredSubtitleLanguage: String?
         let preferredAudioLanguage: String?
 
@@ -68,12 +69,14 @@ final class CloudSettingsSync {
             debridAPIKeys = data["debridAPIKeys"] as? [String: String]
             debridProvider = data["debridProvider"] as? String
             tmdbAPIKey = data["tmdbAPIKey"] as? String
+            omdbAPIKey = data["omdbAPIKey"] as? String
             preferredSubtitleLanguage = data["preferredSubtitleLanguage"] as? String
             preferredAudioLanguage = data["preferredAudioLanguage"] as? String
         }
 
         var isEmpty: Bool {
             debridAPIKeys == nil && debridProvider == nil && tmdbAPIKey == nil
+                && omdbAPIKey == nil
                 && preferredSubtitleLanguage == nil && preferredAudioLanguage == nil
         }
         var payload: [String: Any] {
@@ -81,6 +84,7 @@ final class CloudSettingsSync {
             if let debridAPIKeys { out["debridAPIKeys"] = debridAPIKeys }
             if let debridProvider { out["debridProvider"] = debridProvider }
             if let tmdbAPIKey { out["tmdbAPIKey"] = tmdbAPIKey }
+            if let omdbAPIKey { out["omdbAPIKey"] = omdbAPIKey }
             if let preferredSubtitleLanguage { out["preferredSubtitleLanguage"] = preferredSubtitleLanguage }
             if let preferredAudioLanguage { out["preferredAudioLanguage"] = preferredAudioLanguage }
             return out
@@ -98,6 +102,9 @@ final class CloudSettingsSync {
         }
         if let tmdb = remote.tmdbAPIKey, tmdb != settings.tmdbAPIKey {
             settings.tmdbAPIKey = tmdb
+        }
+        if let omdb = remote.omdbAPIKey, omdb != settings.omdbAPIKey {
+            settings.omdbAPIKey = omdb
         }
         if let subs = remote.preferredSubtitleLanguage, subs != settings.preferredSubtitleLanguage {
             settings.preferredSubtitleLanguage = subs
@@ -120,6 +127,7 @@ final class CloudSettingsSync {
             _ = settings.debridAPIKeys
             _ = settings.debridProvider
             _ = settings.tmdbAPIKey
+            _ = settings.omdbAPIKey
             _ = settings.preferredSubtitleLanguage
             _ = settings.preferredAudioLanguage
         } onChange: { [weak self] in
@@ -146,6 +154,7 @@ final class CloudSettingsSync {
             "debridAPIKeys": settings.debridAPIKeys,
             "debridProvider": settings.debridProvider.rawValue,
             "tmdbAPIKey": settings.tmdbAPIKey,
+            "omdbAPIKey": settings.omdbAPIKey,
             "preferredSubtitleLanguage": settings.preferredSubtitleLanguage,
             "preferredAudioLanguage": settings.preferredAudioLanguage,
         ]
@@ -160,6 +169,7 @@ final class CloudSettingsSync {
             "debridAPIKeys": (data["debridAPIKeys"] as? [String: String]) ?? [:],
             "debridProvider": (data["debridProvider"] as? String) ?? "",
             "tmdbAPIKey": (data["tmdbAPIKey"] as? String) ?? "",
+            "omdbAPIKey": (data["omdbAPIKey"] as? String) ?? "",
             "preferredSubtitleLanguage": (data["preferredSubtitleLanguage"] as? String) ?? "",
             "preferredAudioLanguage": (data["preferredAudioLanguage"] as? String) ?? "",
         ]
