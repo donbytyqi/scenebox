@@ -1,0 +1,85 @@
+name: Build Android libtorrent
+
+on:
+  workflow_dispatch:
+    inputs:
+      libtorrent_ref:
+        description: 'libtorrent tag or commit'
+        required: false
+        default: 'v2.0.11'
+
+jobs:
+  build-libtorrent:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64]
+        include:
+          - abi: arm64-v8a
+            arch: aarch64
+            toolchain: aarch64-linux-android
+          - abi: armeabi-v7a
+            arch: armv7a
+            toolchain: armv7a-linux-androideabi
+          - abi: x86_64
+            arch: x86_64
+            toolchain: x86_64-linux-android
+
+    steps:
+      - name: Checkout SceneBox
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake git pkg-config build-essential
+
+      - name: Install Android SDK/NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "ndk;28.0.13004108"
+
+      - name: Clone libtorrent
+        env:
+          LIBTORRENT_REF: ${{ inputs.libtorrent_ref }}
+        run: |
+          git clone --depth 1 --branch "$LIBTORRENT_REF" https://github.com/arvidn/libtorrent.git third_party/libtorrent
+
+      - name: Configure
+        env:
+          ABI: ${{ matrix.abi }}
+          TOOLCHAIN: ${{ matrix.toolchain }}
+        run: |
+          NDK="$ANDROID_HOME/ndk/28.0.13004108"
+          cmake -S third_party/libtorrent -B build/${ABI} -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI="$ABI" \
+            -DANDROID_PLATFORM=android-24 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=17 \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+            -Dbuild_tests=OFF \
+            -Dbuild_examples=OFF \
+            -Dbuild_tools=OFF \
+            -Ddeprecated-functions=OFF \
+            -Dstatic_runtime=ON
+
+      - name: Build
+        run: cmake --build build/${{ matrix.abi }} --parallel 2
+
+      - name: Package ABI
+        run: |
+          mkdir -p out/include out/lib/${{ matrix.abi }}
+          cp -a third_party/libtorrent/include/. out/include/
+          find build/${{ matrix.abi }} -name 'libtorrent-rasterbar.a' -exec cp {} out/lib/${{ matrix.abi }}/libtorrent-rasterbar.a \;
+          test -s out/lib/${{ matrix.abi }}/libtorrent-rasterbar.a
+          tar -czf scenebox-libtorrent-${{ matrix.abi }}.tar.gz -C out .
+
+      - name: Upload ABI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scenebox-libtorrent-${{ matrix.abi }}
+          path: scenebox-libtorrent-${{ matrix.abi }}.tar.gz
