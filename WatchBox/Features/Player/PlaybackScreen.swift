@@ -37,14 +37,26 @@ struct PlaybackScreen: View {
     @State private var subs = SubtitlesController()
     @State private var failure: String?
     @State private var isStalled = false
-    @State private var didSeekToStart = false
-    @State private var openRetries = 0
+    @State private var isRecoveringVideo = false
+    @State private var videoRecoveries = 0
+    @State private var recovery = PlaybackRecovery()
+    @State private var pendingResume: Duration?
+    @State private var retryID = 0
+    @State private var isReconnecting = false
+    @State private var isActive = false
+    @State private var didFinishPlayback = false
+    @State private var resumeAudio: Track?
+    @State private var resumeSubtitle: Track?
+    @State private var resumeExternalSubtitle: SubtitleTrack?
+    @State private var restoreSelections = false
+    @State private var resumeSubtitlesRestored = false
     @State private var knownDuration: Duration = .zero
     @State private var upNextSecondsLeft: Int?
     @State private var upNextCancelled = false
     @State private var didAutoAdvance = false
     @State private var originalAudioSatisfied = false
     #if os(iOS)
+    @Environment(\.scenePhase) private var scenePhase
     @State private var isLandscape = false
     @FocusState private var hasKeyboardFocus: Bool
     @State private var lastHoverReveal = Date.distantPast
@@ -81,7 +93,7 @@ struct PlaybackScreen: View {
             #endif
 
             if let failure {
-                FailureOverlay(message: failure, onClose: onClose)
+                FailureOverlay(message: failure, onRetry: retryPlayback, onClose: onClose)
             } else if chrome.isVisible {
                 #if os(tvOS)
                 TVPlaybackChrome(
@@ -198,24 +210,21 @@ struct PlaybackScreen: View {
         .preferredColorScheme(.dark)
         .task(id: chrome.autoHideID) { await chrome.autoHide() }
         .task { await watchForStalls() }
+        .task { await watchForFrozenVideo() }
         .task { await watchForUpNext() }
         .task { await recordProgressPeriodically() }
         .task { await keepNowPlayingFresh() }
-        .task(id: openRetries) {
-            guard openRetries > 0 else { return }
-            try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled else { return }
-            beginPlayback()
-        }
+        .task(id: retryID) { await reconnectPlayback() }
         #if DEBUG
         .task { await reportPlayerTime() }
         .task { await monitorPlayback() }
         .task { await runAutoSeekScript() }
         #endif
-        .onChange(of: player.isSeekable) { _, seekable in
-            guard seekable, !didSeekToStart, startAt > .zero else { return }
-            didSeekToStart = true
-            try? player.seek(to: startAt)
+        .onChange(of: player.isSeekable) { _, _ in restoreResumePosition() }
+        .onChange(of: player.currentTime) { _, time in
+            guard isActive, !isReconnecting, !isRecoveringVideo, pendingResume == nil,
+                  player.state == .playing || player.state == .paused else { return }
+            recovery.position = time
         }
         .onAppear(perform: start)
         #if os(iOS)
@@ -236,13 +245,15 @@ struct PlaybackScreen: View {
             }
         }
         .onChange(of: player.subtitleTracks.count) { _, _ in
-            subs.syncEmbedded(on: player)
+            if restoreSelections { restorePlaybackSelections() }
+            else { subs.syncEmbedded(on: player) }
         }
         .onChange(of: player.selectedSubtitleTrack?.id) { _, _ in
-            subs.syncEmbedded(on: player)
+            if !restoreSelections { subs.syncEmbedded(on: player) }
         }
         .onChange(of: player.audioTracks.count) { _, _ in
-            syncOriginalAudio()
+            if restoreSelections { restorePlaybackSelections() }
+            else { syncOriginalAudio() }
         }
         .onChange(of: player.duration) { _, new in
             if let new, new > .zero { knownDuration = new }
@@ -254,12 +265,12 @@ struct PlaybackScreen: View {
             if wasBuffering, !buffering { chrome.playbackStarted() }
         }
         .onChange(of: player.state) { _, state in
-            guard state == .error, failure == nil else { return }
-            if url.host == "127.0.0.1", player.currentTime == .zero, openRetries < 5 {
-                player.stop()
-                openRetries += 1
-            } else {
-                failure = "Playback failed. The release may be corrupt or use an unsupported container."
+            guard isActive, failure == nil, !isReconnecting, !isRecoveringVideo else { return }
+            if state == .error {
+                requestReconnect()
+            } else if state == .playing {
+                restoreResumePosition()
+                if restoreSelections { restorePlaybackSelections() }
             }
         }
         .onDisappear(perform: teardown)
@@ -267,6 +278,7 @@ struct PlaybackScreen: View {
 
     private var isBuffering: Bool {
         guard failure == nil else { return false }
+        if isReconnecting { return true }
         switch player.state {
         case .opening, .buffering: return true
         case .playing: return player.currentTime == .zero || isStalled
@@ -277,10 +289,28 @@ struct PlaybackScreen: View {
     private func watchForStalls() async {
         var lastSeen = player.currentTime
         var frozenTicks = 0
+        let clock = ContinuousClock()
+        var lastCheck = clock.now
 
         while !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
+
+            let now = clock.now
+            let elapsed = lastCheck.duration(to: now)
+            lastCheck = now
+            let expectedToAdvance = isActive && failure == nil && !didFinishPlayback
+                && !isReconnecting && !isRecoveringVideo
+                && (player.state == .playing || player.state == .opening || player.state == .error
+                    || player.state == .buffering
+                    || (player.state == .stopped && recovery.endedPrematurely(duration: knownDuration)))
+            if isNetworkStream, recovery.observe(time: pendingResume ?? player.currentTime, elapsed: elapsed,
+                                                expectedToAdvance: expectedToAdvance,
+                                                timeout: .seconds(url.host == "127.0.0.1" ? 45 : 20)) {
+                requestReconnect()
+            }
+            restoreResumePosition()
+            if restoreSelections { restorePlaybackSelections() }
 
             guard player.isPlaying else {
                 frozenTicks = 0
@@ -296,6 +326,165 @@ struct PlaybackScreen: View {
                 lastSeen = player.currentTime
             }
             isStalled = frozenTicks >= 3
+        }
+    }
+
+    // MARK: - Interrupted stream recovery
+
+    private var isNetworkStream: Bool {
+        ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+    }
+
+    private func requestReconnect() {
+        guard isActive, !isReconnecting, !isRecoveringVideo, !didFinishPlayback else { return }
+        guard isNetworkStream,
+              recovery.reserveRetry(limit: url.host == "127.0.0.1" ? 5 : 3) else {
+            failure = "Playback was interrupted. Retry to resume, or choose another source."
+            player.stop()
+            chrome.reveal(autoHide: false)
+            return
+        }
+        // Keep the previous selection if another attempt fails before tracks arrive.
+        if !restoreSelections {
+            resumeAudio = player.selectedAudioTrack
+            resumeSubtitle = player.selectedSubtitleTrack
+            resumeExternalSubtitle = subs.available.first { $0.id == subs.selectedID }
+            restoreSelections = true
+            resumeSubtitlesRestored = false
+        }
+        isReconnecting = true
+        pendingResume = recovery.position > .zero ? recovery.position : nil
+        upNextSecondsLeft = nil
+        retryID += 1
+        chrome.reveal(autoHide: false)
+    }
+
+    private func reconnectPlayback() async {
+        guard retryID > 0, isActive, isReconnecting else { return }
+        #if DEBUG
+        playbackLog.notice("stream interrupted: reconnecting (attempt \(recovery.attempts, privacy: .public))")
+        #endif
+        await player.stopAndWait()
+        try? await Task.sleep(for: .seconds(min(recovery.attempts, 3)))
+        guard !Task.isCancelled, isActive else { return }
+        isReconnecting = false
+        beginPlayback()
+    }
+
+    private func retryPlayback() {
+        failure = nil
+        recovery.resetAttempts()
+        if isNetworkStream {
+            requestReconnect()
+        } else {
+            pendingResume = recovery.position > .zero ? recovery.position : nil
+            beginPlayback()
+        }
+    }
+
+    private func restoreResumePosition() {
+        guard isActive, !isReconnecting, !isRecoveringVideo, failure == nil,
+              player.isSeekable, player.state == .playing || player.state == .paused,
+              let target = pendingResume else { return }
+        do {
+            try player.seek(to: target)
+            pendingResume = nil
+        } catch {
+            // Seekability can precede demuxer readiness. Retry on the next tick.
+        }
+    }
+
+    private func restorePlaybackSelections() {
+        guard !isReconnecting, !isRecoveringVideo, player.isPlaying else { return }
+        if let audio = resumeAudio,
+           let match = matchingTrack(audio, in: player.audioTracks) {
+            player.selectedAudioTrack = match
+            resumeAudio = nil
+        }
+        if resumeSubtitlesRestored {
+            // Audio tracks can arrive after the subtitle selection was restored.
+        } else if let external = resumeExternalSubtitle {
+            subs.apply(external, on: player)
+            resumeExternalSubtitle = nil
+            resumeSubtitle = nil
+            resumeSubtitlesRestored = true
+        } else if let subtitle = resumeSubtitle,
+                  let match = matchingTrack(subtitle, in: player.subtitleTracks) {
+            subs.selectEmbedded(match, on: player)
+            resumeSubtitle = nil
+            resumeSubtitlesRestored = true
+        } else if resumeSubtitle == nil, resumeExternalSubtitle == nil {
+            player.selectedSubtitleTrack = nil
+            resumeSubtitlesRestored = true
+        }
+        restoreSelections = resumeAudio != nil || !resumeSubtitlesRestored
+    }
+
+    private func matchingTrack(_ track: Track, in tracks: [Track]) -> Track? {
+        tracks.first { $0.id == track.id }
+            ?? tracks.first { $0.name == track.name && $0.language == track.language }
+            ?? tracks.first { track.language != nil && $0.language == track.language }
+    }
+
+    // MARK: - Frozen video recovery
+
+    private var videoOutputExpected: Bool {
+        guard player.videoTracks.contains(where: \.isSelected) else { return false }
+        #if os(iOS)
+        if scenePhase != .active { return false }
+        #endif
+        return true
+    }
+
+    // Audio drives VLC's clock. If time keeps moving but the frame counter
+    // doesn't, the video output died on us and needs a rebuild.
+    private func watchForFrozenVideo() async {
+        var lastDisplayed: UInt64 = 0
+        var lastTime = player.currentTime
+        var frozenTicks = 0
+
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+
+            guard failure == nil, !isReconnecting, !isRecoveringVideo, player.isPlaying, !isBuffering,
+                  videoOutputExpected, let stats = player.statistics else {
+                frozenTicks = 0
+                lastDisplayed = player.statistics?.displayedPictures ?? 0
+                lastTime = player.currentTime
+                continue
+            }
+
+            let advanced = (player.currentTime - lastTime).asSeconds
+            if stats.displayedPictures == lastDisplayed, advanced >= 0.7 {
+                frozenTicks += 1
+            } else {
+                frozenTicks = 0
+            }
+            lastDisplayed = stats.displayedPictures
+            lastTime = player.currentTime
+
+            if frozenTicks >= 4 {
+                frozenTicks = 0
+                await recoverVideoOutput()
+            }
+        }
+    }
+
+    private func recoverVideoOutput() async {
+        guard videoRecoveries < 3 else { return }
+        videoRecoveries += 1
+        isRecoveringVideo = true
+        defer { isRecoveringVideo = false }
+        #if DEBUG
+        playbackLog.notice("video output frozen: rebuilding session (attempt \(videoRecoveries, privacy: .public))")
+        #endif
+
+        let externalSubtitle = subs.available.first { $0.id == subs.selectedID }
+        do {
+            try await player.recast(to: nil)
+            if let externalSubtitle { subs.apply(externalSubtitle, on: player) }
+        } catch {
         }
     }
 
@@ -317,7 +506,8 @@ struct PlaybackScreen: View {
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
 
-            guard !upNextCancelled, !didAutoAdvance, failure == nil,
+            guard !upNextCancelled, !didAutoAdvance, failure == nil, !isReconnecting,
+                  pendingResume == nil,
                   knownDuration > .zero, player.currentTime > .zero else {
                 upNextSecondsLeft = nil
                 continue
@@ -332,6 +522,12 @@ struct PlaybackScreen: View {
     }
 
     private func playbackEnded() {
+        guard isActive, !isReconnecting, !isRecoveringVideo, !didFinishPlayback, failure == nil else { return }
+        if isNetworkStream, recovery.endedPrematurely(duration: knownDuration) {
+            requestReconnect()
+            return
+        }
+        didFinishPlayback = true
         if let progress, knownDuration > .zero {
             WatchProgressStore.shared.record(
                 id: progress.mediaID, mediaType: progress.mediaType, title: progress.title,
@@ -419,21 +615,27 @@ struct PlaybackScreen: View {
             let delta = (now - last).asSeconds
             last = now
             let stalled = player.isPlaying && delta < 0.25
+            let stats = player.statistics
 
             playbackLog.notice("""
             \(stalled ? "STALL" : "ok", privacy: .public) · playing=\(player.isPlaying, privacy: .public) \
             playhead=\(timecode(now), privacy: .public) Δ=\(String(format: "%.2f", delta), privacy: .public)s \
-            state=\(String(describing: player.state), privacy: .public) buffering=\(isBuffering, privacy: .public)
+            state=\(String(describing: player.state), privacy: .public) buffering=\(isBuffering, privacy: .public) \
+            frames=\(stats?.displayedPictures ?? 0, privacy: .public) late=\(stats?.latePictures ?? 0, privacy: .public) lost=\(stats?.lostPictures ?? 0, privacy: .public)
             """)
         }
     }
     #endif
 
     private func start() {
+        isActive = true
+        recovery.position = startAt
+        pendingResume = startAt > .zero ? startAt : nil
         player.aspectRatio = settings.fillScreen ? .fill : .default
         player.setSubtitleScale(SubtitleScale(Float(settings.subtitleScale)))
         Task {
             await PlaybackAudioSession.activate()
+            guard isActive else { return }
             beginPlayback()
             #if os(iOS)
             let controller = NowPlayingController(player: player, title: title)
@@ -463,14 +665,13 @@ struct PlaybackScreen: View {
                     : settings.networkCacheMilliseconds
                 media.addOption(":network-caching=\(cacheMs)")
 
-                if isTorrent {
-                } else {
+                if !isTorrent {
                     media.addOption(":http-reconnect")
                 }
             }
             try player.play(media)
         } catch {
-            failure = error.localizedDescription
+            requestReconnect()
         }
 
         if let subtitleContext {
@@ -523,16 +724,17 @@ struct PlaybackScreen: View {
     }
 
     private func recordProgress() {
-        guard let progress, failure == nil else { return }
-        guard player.currentTime > .zero else { return }
+        guard let progress, !didFinishPlayback, recovery.position > .zero else { return }
         WatchProgressStore.shared.record(
             id: progress.mediaID, mediaType: progress.mediaType, title: progress.title,
             posterURL: progress.posterURL, season: progress.season,
             episode: progress.episode, episodeID: progress.episodeID,
-            position: player.currentTime, duration: player.duration, source: progress.source)
+            position: recovery.position,
+            duration: knownDuration > .zero ? knownDuration : player.duration, source: progress.source)
     }
 
     private func teardown() {
+        isActive = false
         #if os(iOS)
         nowPlaying?.end()
         nowPlaying = nil
@@ -562,6 +764,7 @@ private struct InvisibleButtonStyle: ButtonStyle {
 
 private struct FailureOverlay: View {
     let message: String
+    let onRetry: () -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -572,8 +775,10 @@ private struct FailureOverlay: View {
             Text(message)
                 .multilineTextAlignment(.center)
                 .font(.callout)
-            Button("Close", action: onClose)
+            Button("Retry", action: onRetry)
                 .buttonStyle(.borderedProminent)
+            Button("Close", action: onClose)
+                .buttonStyle(.bordered)
         }
         .foregroundStyle(.white)
         .padding(28)
