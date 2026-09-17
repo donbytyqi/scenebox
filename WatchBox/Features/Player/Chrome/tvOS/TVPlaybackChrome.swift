@@ -27,6 +27,7 @@ struct TVPlaybackChrome: View {
     @State private var seekFlash: SeekFlash?
     @State private var lastRewindAt: Date?
     @FocusState private var focus: Field?
+    @Namespace private var controlsFocusScope
 
     private let doubleSwipeWindow: TimeInterval = 0.65
 
@@ -49,6 +50,9 @@ struct TVPlaybackChrome: View {
             .padding(.horizontal, 80)
             .padding(.top, 56)
             .padding(.bottom, 52)
+            .disabled(isPanelOpen)
+            .focusScope(controlsFocusScope)
+            .defaultFocus($focus, .playPause)
 
             if let flash = seekFlash { seekIndicator(flash) }
 
@@ -66,18 +70,29 @@ struct TVPlaybackChrome: View {
             }
         }
         .foregroundStyle(.white)
-        .defaultFocus($focus, .scrubber)
         .animation(.easeInOut(duration: 0.15), value: showSettings)
         .animation(.easeInOut(duration: 0.15), value: showEpisodes)
         .animation(.easeInOut(duration: 0.2), value: isPaused)
-        .onChange(of: showSettings) { _, open in onSettingsOpenChanged(open) }
-        .onChange(of: showEpisodes) { _, open in onSettingsOpenChanged(open) }
+        .onChange(of: isPanelOpen) { _, open in
+            onSettingsOpenChanged(open)
+            focus = open ? nil : .playPause
+        }
         .onChange(of: focus) { _, _ in
             lastRewindAt = nil
             onInteraction()
         }
         .onChange(of: player.duration) { _, new in if let new, new > .zero { knownDuration = new } }
-        .onAppear { if let d = player.duration, d > .zero { knownDuration = d } }
+        .onAppear {
+            if let d = player.duration, d > .zero { knownDuration = d }
+            focus = .playPause
+        }
+        .task(id: focus) {
+            guard focus == nil, !isPanelOpen else { return }
+            // Allow outgoing panels to leave the focus tree before restoring it.
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled, !isPanelOpen, focus == nil else { return }
+            focus = .playPause
+        }
         .task(id: seekFlash?.token) {
             guard seekFlash != nil else { return }
             try? await Task.sleep(for: .seconds(0.9))
@@ -155,6 +170,7 @@ struct TVPlaybackChrome: View {
                 }
                 .buttonStyle(BareButtonStyle())
                 .focused($focus, equals: .playPause)
+                .prefersDefaultFocus(true, in: controlsFocusScope)
                 .onMoveCommand { direction in
                     switch direction {
                     case .up: focus = episodes != nil ? .episodes : .cc
@@ -248,6 +264,7 @@ struct TVPlaybackChrome: View {
     // MARK: - Derived
 
     private var isPaused: Bool { !player.isPlaying && !isBuffering }
+    private var isPanelOpen: Bool { showSettings || showEpisodes }
 
     private var titleParts: (main: String, episode: String?) {
         let parts = title.components(separatedBy: " · ")

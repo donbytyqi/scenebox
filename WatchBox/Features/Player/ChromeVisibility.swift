@@ -56,9 +56,9 @@ final class ChromeVisibility {
     }
 
     func autoHide() async {
-        guard autoHideID != nil else { return }
+        guard let scheduledID = autoHideID else { return }
         try? await Task.sleep(for: .seconds(4))
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, autoHideID == scheduledID, !isHeld, isVisible else { return }
         withAnimation { isVisible = false }
         autoHideID = nil
     }

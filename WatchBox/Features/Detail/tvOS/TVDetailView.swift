@@ -63,7 +63,9 @@ struct TVDetailView: View {
         .animation(.easeOut(duration: 0.15), value: focusedEpisodeID)
         .onAppear {
             if !hasEpisodes { shelf = hasCast ? .cast : .similar }
+            selectResumeSeason()
         }
+        .onChange(of: resumeEpisode?.id) { _, _ in selectResumeSeason() }
         .onChange(of: similar.isEmpty) { _, empty in
             if !empty, !hasEpisodes, !hasCast { shelf = .similar }
         }
@@ -369,6 +371,11 @@ struct TVDetailView: View {
         season == 0 ? "Specials" : "Season \(season)"
     }
 
+    private func selectResumeSeason() {
+        guard let episode = resumeEpisode, detail.seasons.contains(episode.season) else { return }
+        selectedSeason = episode.season
+    }
+
     @ViewBuilder
     private var episodeShelf: some View {
         let episodes = detail.episodes(inSeason: selectedSeason)
@@ -378,44 +385,53 @@ struct TVDetailView: View {
                 .foregroundStyle(.white.opacity(0.6))
                 .frame(maxHeight: .infinity, alignment: .top)
         } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(alignment: .top, spacing: 32) {
-                    ForEach(episodes) { episode in
-                        Button {
-                            onWatch(episode)
-                        } label: {
-                            TVEpisodeCard(
-                                episode: episode,
-                                isDownloaded: downloads.isDownloaded(mediaID: detail.id,
-                                                                     episodeLabel: episode.label),
-                                isWatched: watchedEpisodes.contains(episode.label),
-                                progress: episode.id == resumeEpisode?.id ? watchProgress : nil)
-                        }
-                        .buttonStyle(TVPosterButtonStyle(ring: false, scale: 1.05))
-                        .focused($focusedEpisodeID, equals: episode.id)
-                        .contextMenu {
-                            if let overview = episode.overview, !overview.isEmpty {
-                                Button { detailEpisode = episode } label: {
-                                    Label("Show Details", systemImage: "text.alignleft")
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 32) {
+                        ForEach(episodes) { episode in
+                            Button {
+                                onWatch(episode)
+                            } label: {
+                                TVEpisodeCard(
+                                    episode: episode,
+                                    isDownloaded: downloads.isDownloaded(mediaID: detail.id,
+                                                                         episodeLabel: episode.label),
+                                    isWatched: watchedEpisodes.contains(episode.label),
+                                    progress: episode.id == resumeEpisode?.id ? watchProgress : nil)
+                            }
+                            .buttonStyle(TVPosterButtonStyle(ring: false, scale: 1.05))
+                            .focused($focusedEpisodeID, equals: episode.id)
+                            .id(episode.id)
+                            .contextMenu {
+                                if let overview = episode.overview, !overview.isEmpty {
+                                    Button { detailEpisode = episode } label: {
+                                        Label("Show Details", systemImage: "text.alignleft")
+                                    }
                                 }
-                            }
-                            let watched = watchedEpisodes.contains(episode.label)
-                            Button { onSetWatched(episode, !watched) } label: {
-                                Label(watched ? "Mark as Unwatched" : "Mark as Watched",
-                                      systemImage: watched ? "eye.slash" : "checkmark.circle")
-                            }
-                            Button { onDownload(episode) } label: {
-                                Label("Download", systemImage: "arrow.down.circle")
+                                let watched = watchedEpisodes.contains(episode.label)
+                                Button { onSetWatched(episode, !watched) } label: {
+                                    Label(watched ? "Mark as Unwatched" : "Mark as Watched",
+                                          systemImage: watched ? "eye.slash" : "checkmark.circle")
+                                }
+                                Button { onDownload(episode) } label: {
+                                    Label("Download", systemImage: "arrow.down.circle")
+                                }
                             }
                         }
                     }
+                    .padding(.horizontal, 20)   // room for the focus lift
+                    .padding(.vertical, 18)
                 }
-                .padding(.horizontal, 20)   // room for the focus lift
-                .padding(.vertical, 18)
+                .padding(.horizontal, -20)
+                .scrollClipDisabled()
+                .id(selectedSeason)         // fresh row (and scroll offset) per season
+                .task(id: episodes.first(where: { $0.id == resumeEpisode?.id })?.id ?? episodes.first?.id) {
+                    let target = episodes.first(where: { $0.id == resumeEpisode?.id }) ?? episodes.first
+                    await Task.yield()
+                    guard !Task.isCancelled, let target else { return }
+                    proxy.scrollTo(target.id, anchor: .leading)
+                }
             }
-            .padding(.horizontal, -20)
-            .scrollClipDisabled()
-            .id(selectedSeason)         // fresh row (and scroll offset) per season
         }
     }
 
