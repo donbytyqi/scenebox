@@ -16,6 +16,7 @@ struct TVEpisodePanel: View {
 
     @State private var season: Int
     @FocusState private var focus: Focus?
+    @Namespace private var panelFocusScope
 
     private enum Focus: Hashable { case close, season(Int), episode(String) }
 
@@ -48,6 +49,7 @@ struct TVEpisodePanel: View {
         }
         .foregroundStyle(.white)
         .defaultFocus($focus, .episode(episodes.current.id))
+        .focusScope(panelFocusScope)
         .onExitCommand(perform: onClose)
     }
 
@@ -78,18 +80,29 @@ struct TVEpisodePanel: View {
     }
 
     private var episodeList: some View {
-        ScrollView {
-            VStack(spacing: 10) {
-                ForEach(episodes.episodes(inSeason: season)) { episode in
-                    Button { onPlay(episode) } label: { EmptyView() }
-                        .buttonStyle(EpisodeRowStyle(episode: episode,
-                                                     isCurrent: episode.id == episodes.current.id))
-                        .focused($focus, equals: .episode(episode.id))
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(episodes.episodes(inSeason: season)) { episode in
+                        Button { onPlay(episode) } label: { EmptyView() }
+                            .buttonStyle(EpisodeRowStyle(episode: episode,
+                                                         isCurrent: episode.id == episodes.current.id))
+                            .focused($focus, equals: .episode(episode.id))
+                            .id(episode.id)
+                    }
                 }
+                .padding(.vertical, 4)
             }
-            .padding(.vertical, 4)
+            .focusSection()
+            .task(id: season) {
+                let target = season == episodes.current.season
+                    ? episodes.current : episodes.episodes(inSeason: season).first
+                await Task.yield()
+                guard !Task.isCancelled, let target else { return }
+                proxy.scrollTo(target.id, anchor: .center)
+                if focus == nil { focus = .episode(target.id) }
+            }
         }
-        .focusSection()
     }
 }
 

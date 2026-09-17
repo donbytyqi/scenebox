@@ -55,8 +55,12 @@ struct PlaybackScreen: View {
     @State private var upNextCancelled = false
     @State private var didAutoAdvance = false
     @State private var originalAudioSatisfied = false
-    #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
+    #if os(tvOS)
+    @FocusState private var remoteSurfaceFocused: Bool
+    @Namespace private var remoteFocusScope
+    #endif
+    #if os(iOS)
     @State private var isLandscape = false
     @FocusState private var hasKeyboardFocus: Bool
     @State private var lastHoverReveal = Date.distantPast
@@ -135,15 +139,22 @@ struct PlaybackScreen: View {
             }
 
             #if os(tvOS)
-            if failure == nil, !chrome.isVisible {
+            if failure == nil {
                 Button {
-                    chrome.screenTapped(shouldAutoHide: player.isPlaying && !isBuffering)
+                    chrome.reveal(autoHide: player.isPlaying && !isBuffering)
                 } label: {
                     Color.clear
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(InvisibleButtonStyle())
+                .focused($remoteSurfaceFocused)
+                .defaultFocus($remoteSurfaceFocused, true)
+                .focusScope(remoteFocusScope)
+                .disabled(chrome.isVisible)
+                .allowsHitTesting(!chrome.isVisible)
+                .accessibilityHidden(chrome.isVisible)
+                .accessibilityLabel("Show playback controls")
                 .ignoresSafeArea()
             }
             #endif
@@ -189,6 +200,12 @@ struct PlaybackScreen: View {
         }
         #endif
         #if os(tvOS)
+        .task(id: chrome.isVisible) { await restoreRemoteFocus() }
+        .task(id: remoteSurfaceFocused) { await restoreRemoteFocus() }
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await restoreRemoteFocus()
+        }
         .onPlayPauseCommand { player.togglePlaybackReasserting() }
         .onMoveCommand { _ in
             guard failure == nil, !chrome.isVisible else { return }
@@ -275,6 +292,17 @@ struct PlaybackScreen: View {
         }
         .onDisappear(perform: teardown)
     }
+
+    #if os(tvOS)
+    private func restoreRemoteFocus() async {
+        guard !chrome.isVisible, failure == nil else { return }
+        // The outgoing controls remain in the focus tree during their fade-out.
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled, isActive, scenePhase == .active,
+              !chrome.isVisible, failure == nil else { return }
+        remoteSurfaceFocused = true
+    }
+    #endif
 
     private var isBuffering: Bool {
         guard failure == nil else { return false }
@@ -442,6 +470,7 @@ struct PlaybackScreen: View {
         var lastDisplayed: UInt64 = 0
         var lastTime = player.currentTime
         var frozenTicks = 0
+        var healthyTicks = 0
 
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
@@ -450,6 +479,7 @@ struct PlaybackScreen: View {
             guard failure == nil, !isReconnecting, !isRecoveringVideo, player.isPlaying, !isBuffering,
                   videoOutputExpected, let stats = player.statistics else {
                 frozenTicks = 0
+                healthyTicks = 0
                 lastDisplayed = player.statistics?.displayedPictures ?? 0
                 lastTime = player.currentTime
                 continue
@@ -458,34 +488,52 @@ struct PlaybackScreen: View {
             let advanced = (player.currentTime - lastTime).asSeconds
             if stats.displayedPictures == lastDisplayed, advanced >= 0.7 {
                 frozenTicks += 1
+                healthyTicks = 0
             } else {
                 frozenTicks = 0
+                // A minute of flowing frames earns back the cheap rebuilds,
+                // so a freeze late in a movie isn't met with silence.
+                if stats.displayedPictures != lastDisplayed {
+                    healthyTicks += 1
+                    if healthyTicks >= 60, videoRecoveries > 0 {
+                        videoRecoveries = 0
+                    }
+                }
             }
             lastDisplayed = stats.displayedPictures
             lastTime = player.currentTime
 
             if frozenTicks >= 4 {
                 frozenTicks = 0
+                healthyTicks = 0
                 await recoverVideoOutput()
             }
         }
     }
 
     private func recoverVideoOutput() async {
-        guard videoRecoveries < 3 else { return }
         videoRecoveries += 1
         isRecoveringVideo = true
-        defer { isRecoveringVideo = false }
         #if DEBUG
         playbackLog.notice("video output frozen: rebuilding session (attempt \(videoRecoveries, privacy: .public))")
         #endif
 
-        let externalSubtitle = subs.available.first { $0.id == subs.selectedID }
-        do {
-            try await player.recast(to: nil)
-            if let externalSubtitle { subs.apply(externalSubtitle, on: player) }
-        } catch {
+        // Two in-place rebuilds; if those fail or the freeze comes right
+        // back, hand over to the full reconnect (stop, reopen at position,
+        // restore tracks). Its budget ends in the Retry overlay, never
+        // in a silently dead picture.
+        if videoRecoveries <= 2 {
+            let externalSubtitle = subs.available.first { $0.id == subs.selectedID }
+            do {
+                try await player.recast(to: nil)
+                if let externalSubtitle { subs.apply(externalSubtitle, on: player) }
+                isRecoveringVideo = false
+                return
+            } catch {
+            }
         }
+        isRecoveringVideo = false
+        requestReconnect()
     }
 
     // MARK: - Auto-play next episode
