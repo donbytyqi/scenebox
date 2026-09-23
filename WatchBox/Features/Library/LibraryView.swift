@@ -45,6 +45,9 @@ struct LibraryView: View {
             .background(Theme.background)
             .pageTitle("Library")
             .mediaNavigationDestinations()
+            .navigationDestination(for: TraktListSummary.self) { list in
+                TraktListItemsView(list: list)
+            }
         }
     }
 

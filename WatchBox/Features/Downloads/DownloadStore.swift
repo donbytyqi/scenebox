@@ -77,7 +77,14 @@ final class DownloadStore {
     var activeCount: Int { downloads.filter { $0.phase.isActive }.count }
 
     func contains(infoHash: String) -> Bool {
-        downloads.contains { $0.id == infoHash.lowercased() }
+        let hash = infoHash.lowercased()
+        return downloads.contains { $0.id == hash || $0.id.hasPrefix(hash + "-") }
+    }
+
+    static func downloadID(for stream: TorrentStream) -> String {
+        let hash = stream.id.lowercased()
+        guard let fileIndex = stream.fileIndex else { return hash }
+        return "\(hash)-\(fileIndex)"
     }
 
     func completedDownload(mediaID: String, episodeLabel: String?) -> Download? {
@@ -95,8 +102,11 @@ final class DownloadStore {
     @discardableResult
     func add(stream: TorrentStream, title: String, mediaID: String, mediaType: MediaType,
              posterURL: URL?, episode: Episode? = nil) -> Download {
-        let id = stream.id.lowercased()
-        if let existing = downloads.first(where: { $0.id == id }) { return existing }
+        let id = Self.downloadID(for: stream)
+        let hash = stream.id.lowercased()
+        if let existing = downloads.first(where: {
+            $0.id == id || ($0.id == hash && $0.record.fileIndex == stream.fileIndex)
+        }) { return existing }
 
         let record = DownloadRecord(
             id: id,

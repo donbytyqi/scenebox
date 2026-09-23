@@ -22,9 +22,6 @@ struct TraktLibrarySection: View {
                 notConnected
             }
         }
-        .navigationDestination(for: TraktListSummary.self) { list in
-            TraktListItemsView(list: list)
-        }
         .alert("Sync library to Trakt?", isPresented: Binding(
             get: { trakt.pendingBackfillOffer },
             set: { if !$0 { trakt.pendingBackfillOffer = false } })) {
