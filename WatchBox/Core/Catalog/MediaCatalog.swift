@@ -28,8 +28,7 @@ extension TorrentSearch {
         if !extras.isEmpty { path += "/" + extras.joined(separator: "&") }
 
         guard let url = URL(string: "\(base)/\(path).json") else { throw CatalogError.badURL }
-        let (data, _) = try await URLSession.shared.data(for: Self.request(url))
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let json = try await HTTP.get(url, headers: Self.headers).object
         let metas = json?["metas"] as? [[String: Any]] ?? []
         return metas.compactMap { Self.parseResult($0, type: isAnime ? .series : type) }
     }
@@ -42,19 +41,15 @@ extension TorrentSearch {
         guard let url = URL(string: "\(base)/meta/\(typePath)/\(safeID).json") else {
             throw CatalogError.badURL
         }
-        let (data, _) = try await URLSession.shared.data(for: Self.request(url))
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let json = try await HTTP.get(url, headers: Self.headers).object
         guard let meta = json?["meta"] as? [String: Any] else {
             throw CatalogError.notFound(id)
         }
         return Self.parseDetail(meta, fallbackType: type)
     }
 
-    nonisolated private static func request(_ url: URL) -> URLRequest {
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 20
-        request.setValue(TorrentSearch.userAgent, forHTTPHeaderField: "User-Agent")
-        return request
+    nonisolated private static var headers: [String: String] {
+        ["User-Agent": TorrentSearch.userAgent]
     }
 
     // MARK: Parsing

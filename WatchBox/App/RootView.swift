@@ -107,8 +107,19 @@ struct RootView: View {
 
     #if DEBUG
     private func startAutoStreamIfRequested() {
-        guard externalStreamer == nil,
-              let magnetString = UserDefaults.standard.string(forKey: "WBAutoStreamMagnet"),
+        guard externalStreamer == nil else { return }
+        if let urlString = UserDefaults.standard.string(forKey: "WBAutoStreamURL"),
+           let url = URL(string: urlString) {
+            let streamer = StreamCoordinator()
+            externalStreamer = streamer
+            let progress = WatchProgressContext(
+                mediaID: "tt0000001", mediaType: .movie, title: "Auto-stream URL test",
+                posterURL: nil, season: nil, episode: nil, episodeID: nil,
+                source: WatchSource(debridURLString: url.absoluteString))
+            streamer.playDebrid(url: url, title: "Auto-stream URL test", backdropURL: nil, progress: progress)
+            return
+        }
+        guard let magnetString = UserDefaults.standard.string(forKey: "WBAutoStreamMagnet"),
               let magnet = MagnetLink(string: magnetString) else { return }
         let fileIndex = UserDefaults.standard.object(forKey: "WBAutoStreamFileIndex") != nil
             ? UserDefaults.standard.integer(forKey: "WBAutoStreamFileIndex") : nil

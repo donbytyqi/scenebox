@@ -7,6 +7,45 @@
 
 import Foundation
 
+nonisolated struct WatchSource: Codable, Sendable, Hashable {
+    var infoHashHex: String?
+    var fileIndex: Int?
+    var trackers: [String]?
+    var displayName: String?
+    var debridURLString: String?
+
+    init(infoHashHex: String? = nil, fileIndex: Int? = nil, trackers: [String]? = nil,
+         displayName: String? = nil, debridURLString: String? = nil) {
+        self.infoHashHex = infoHashHex
+        self.fileIndex = fileIndex
+        self.trackers = trackers
+        self.displayName = displayName
+        self.debridURLString = debridURLString
+    }
+
+    init(stream: TorrentStream) {
+        if let url = stream.url {
+            self.init(debridURLString: url.absoluteString)
+        } else {
+            self.init(infoHashHex: stream.infoHash.hexString,
+                      fileIndex: stream.fileIndex,
+                      trackers: stream.trackers.map(\.absoluteString),
+                      displayName: stream.displayName)
+        }
+    }
+
+    var debridURL: URL? { debridURLString.flatMap(URL.init(string:)) }
+
+    var torrentStream: TorrentStream? {
+        guard let hex = infoHashHex, let infoHash = Data(hex: hex), !infoHash.isEmpty else { return nil }
+        let name = displayName ?? "Resume"
+        return TorrentStream(id: hex.lowercased(), title: name, displayName: name,
+                             infoHash: infoHash, fileIndex: fileIndex,
+                             trackers: (trackers ?? []).compactMap(URL.init(string:)),
+                             seeders: nil, sizeText: nil, resolution: nil, url: nil)
+    }
+}
+
 nonisolated struct WatchProgress: Identifiable, Codable, Sendable, Hashable {
     let id: String                 // media IMDb id, matches `MediaResult.id`
     let mediaType: MediaType
@@ -21,6 +60,7 @@ nonisolated struct WatchProgress: Identifiable, Codable, Sendable, Hashable {
     var durationSeconds: Double
     var updatedAt: Date
     var watchedEpisodes: [String]? = nil
+    var lastSource: WatchSource? = nil
 
     var posterURL: URL? { posterURLString.flatMap(URL.init(string:)) }
 

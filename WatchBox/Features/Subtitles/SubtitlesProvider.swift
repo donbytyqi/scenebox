@@ -16,11 +16,9 @@ actor SubtitlesProvider {
         if type == .series, let season, let episode { id += ":\(season):\(episode)" }
         guard let url = URL(string: "\(base)/subtitles/\(type.rawValue)/\(id).json") else { return [] }
 
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 15
         let listCache = Self.directory.appendingPathComponent("list-\(Self.digest(id)).json")
         let data: Data
-        if let fetched = try? await URLSession.shared.data(for: request).0 {
+        if let fetched = (try? await HTTP.get(url, timeout: 15))?.data {
             data = fetched
             try? FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
             try? fetched.write(to: listCache, options: .atomic)
@@ -61,9 +59,7 @@ actor SubtitlesProvider {
         let file = dir.appendingPathComponent("\(track.languageCode)-\(Self.digest(track.id)).\(Self.fileExtension(for: track.url))")
         if FileManager.default.fileExists(atPath: file.path) { return file }
 
-        var request = URLRequest(url: track.url)
-        request.timeoutInterval = 20
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let data = try await HTTP.get(track.url).data
         try data.write(to: file, options: .atomic)
         return file
     }

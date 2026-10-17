@@ -191,7 +191,7 @@ final class StreamCoordinator {
                 if let engineError = error as? TorrentEngineError,
                    engineError == .metadataTimeout || engineError == .bufferTimeout,
                    let next = fallbacks.first {
-                    preparing = "Source unresponsive — trying another…"
+                    preparing = "Source unresponsive, trying another…"
                     Task { @MainActor [self] in
                         play(next, title: title, backdropURL: backdropURL, logoURL: logoURL,
                              subtitleContext: subtitleContext, episodes: episodes,
@@ -293,7 +293,7 @@ final class StreamCoordinator {
             case .noPlayableFile:
                 return "This release has no playable video file."
             case .bufferTimeout:
-                return "This release isn’t serving data — no seeders reachable right now. Try another source with more seeders."
+                return "This release isn’t serving data, no seeders reachable right now. Try another source with more seeders."
             }
         }
         return error.localizedDescription

@@ -87,7 +87,7 @@ final class AuthStore {
         case 17008:  // invalidEmail
             return "That email address doesn't look right."
         case 17026:  // weakPassword
-            return "Choose a stronger password — at least 6 characters."
+            return "Choose a stronger password with at least 6 characters."
         case 17020:  // networkError
             return "Network error. Check your connection and try again."
         case 17010:  // tooManyRequests

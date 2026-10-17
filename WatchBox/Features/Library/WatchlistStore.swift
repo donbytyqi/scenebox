@@ -48,10 +48,14 @@ final class WatchlistStore {
                                      addedAt: Date())
             items.insert(item, at: 0)
             Task { [backend] in await backend.upsert(item) }
+            TraktSync.shared.watchlistChanged(added: true, id: id, mediaType: mediaType)
         }
     }
 
     func remove(id: String) {
+        if let item = items.first(where: { $0.id == id }) {
+            TraktSync.shared.watchlistChanged(added: false, id: id, mediaType: item.mediaType)
+        }
         items.removeAll { $0.id == id }
         Task { [backend] in await backend.remove(id: id) }
     }
