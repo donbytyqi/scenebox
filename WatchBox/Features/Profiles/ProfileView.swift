@@ -17,6 +17,11 @@ struct ProfileView: View {
     @State private var confirmClearStreamCache = false
     @State private var confirmSignOut = false
     @State private var showLogin = false
+    @State private var trakt = TraktStore.shared
+    @State private var config = FirebaseConfigStore.shared
+    #if os(tvOS)
+    @State private var showTraktConnect = false
+    #endif
     @State private var streamCacheBytes: Int64 = 0
 
     var body: some View {
@@ -161,6 +166,71 @@ struct ProfileView: View {
                 }
 
                 Section {
+                    SecureField("OMDb API key", text: $settings.omdbAPIKey)
+                        .autocorrectionDisabled()
+                        .tint(.white)
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never)
+                        #endif
+                } header: {
+                    Text("Ratings")
+                } footer: {
+                    Text("A free OMDb key (omdbapi.com) adds IMDb, Rotten Tomatoes and Metacritic scores to detail pages.")
+                }
+
+                Section {
+                    if settings.traktConnected {
+                        LabeledContent("Account",
+                                       value: settings.traktUsername.isEmpty ? "Connected" : settings.traktUsername)
+                        Toggle("Sync library & history", isOn: $settings.traktSyncEnabled)
+                            .tint(toggleTint)
+                            .onChange(of: settings.traktSyncEnabled) { _, enabled in
+                                if enabled { Task { await TraktSync.shared.backfillIfNeeded() } }
+                            }
+                        Button("Disconnect Trakt", role: .destructive) {
+                            trakt.disconnect()
+                        }
+                    } else if trakt.isAuthorizing {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("Waiting for Trakt…")
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        #if os(tvOS)
+                        Button("Connect Trakt") { showTraktConnect = true }
+                            .disabled(!trakt.isConfigured)
+                        #else
+                        Button("Connect Trakt") { trakt.signIn() }
+                            .disabled(!trakt.isConfigured)
+                        #endif
+                    }
+                } header: {
+                    Text("Trakt")
+                } footer: {
+                    if let error = trakt.authError {
+                        Text(error)
+                    } else if !trakt.isConfigured {
+                        Text("Trakt isn't available in this build.")
+                    } else if settings.traktConnected {
+                        Text("Sync mirrors your watchlist and watched history to your Trakt account. Anime from Kitsu can't be synced because it has no IMDb id.")
+                    } else {
+                        Text("Sign in with your Trakt account to browse your watchlist, favorites and lists in the Library tab.")
+                    }
+                }
+
+                Section {
+                    NavigationLink {
+                        TraktAppCredentialsView()
+                    } label: {
+                        LabeledContent("Trakt app",
+                                       value: TraktConfig.usesCustomApp ? "Custom" : "Bundled")
+                    }
+                } footer: {
+                    Text("Sign-in uses PKCE, so no client secret is needed. Point this at your own Trakt application if you prefer not to use the bundled one.")
+                }
+
+                Section {
                     Picker("Default audio", selection: $settings.preferredAudioLanguage) {
                         ForEach(AppSettings.audioLanguageOptions, id: \.code) { option in
                             Text(option.name).tag(option.code)
@@ -253,6 +323,24 @@ struct ProfileView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        FirebaseSetupView()
+                    } label: {
+                        LabeledContent("Firebase project", value: firebaseStatus)
+                    }
+                } header: {
+                    Text("Account")
+                } footer: {
+                    if config.needsRelaunch {
+                        Text("Quit and reopen SceneBox to switch to the new Firebase project.")
+                    } else if config.isConfigured {
+                        Text("Accounts, profiles and sync run on your own Firebase project.")
+                    } else {
+                        Text("Connect your Firebase project first. Guest mode keeps everything on this device.")
+                    }
+                }
+
+                Section {
                     contactRow("Support", email: "spontaneousarray@gmail.com")
                     NavigationLink("Credits") { CreditsView() }
                 } header: {
@@ -264,6 +352,11 @@ struct ProfileView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
+                        if let profile = profiles.selected {
+                            Button { editing = .edit(profile) } label: {
+                                Label("Edit Profile", systemImage: "pencil")
+                            }
+                        }
                         if profiles.isGuest {
                             Button { showLogin = true } label: {
                                 Label("Sign in or create account", systemImage: "person.crop.circle.badge.plus")
@@ -321,6 +414,23 @@ struct ProfileView: View {
             LoginView(isSheet: true)
                 .environment(auth)
         }
+        #if os(tvOS)
+        .sheet(isPresented: $showTraktConnect) {
+            TraktConnectSheet()
+                .environment(settings)
+        }
+        #endif
+        .alert("Sync library to Trakt?", isPresented: Binding(
+            get: { trakt.pendingBackfillOffer },
+            set: { if !$0 { trakt.pendingBackfillOffer = false } })) {
+            Button("Sync") {
+                settings.traktSyncEnabled = true
+                Task { await TraktSync.shared.backfillIfNeeded() }
+            }
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text("Your watchlist and watched history will be sent to your Trakt account and kept in sync. Anime from Kitsu can't be synced because it has no IMDb id.")
+        }
         .alert("Sign out?", isPresented: $confirmSignOut) {
             Button("Sign out", role: .destructive) { auth.signOut() }
             Button("Cancel", role: .cancel) {}
@@ -350,32 +460,20 @@ struct ProfileView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            HStack(spacing: 12) {
+            if profiles.isGuest {
                 Button {
-                    editing = .edit(profile)
+                    showLogin = true
                 } label: {
-                    Label("Edit Profile", systemImage: "pencil")
+                    Label("Sign in", systemImage: "person.crop.circle")
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 18)
                         .padding(.vertical, 10)
                 }
-                .buttonStyle(.bordered)
-                .tint(.white)
-                if profiles.isGuest {
-                    Button {
-                        showLogin = true
-                    } label: {
-                        Label("Sign in", systemImage: "person.crop.circle")
-                            .font(.subheadline.weight(.semibold))
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.accent)
-                    .foregroundStyle(Theme.onAccent)
-                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                .foregroundStyle(Theme.onAccent)
+                .padding(.top, 4)
             }
-            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 8)
@@ -415,6 +513,15 @@ struct ProfileView: View {
         if hidden.isEmpty { return "None" }
         if hidden.count <= 2 { return hidden.map(\.title).joined(separator: ", ") }
         return "\(hidden.count) hidden"
+    }
+
+    private var firebaseStatus: String {
+        if config.needsRelaunch { return "Relaunch to apply" }
+        switch config.source {
+        case .imported: return "Imported"
+        case .bundled: return "Bundled"
+        case .none: return "Not set up"
+        }
     }
 
     private var appVersion: String {

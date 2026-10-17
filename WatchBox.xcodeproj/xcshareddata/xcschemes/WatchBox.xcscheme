@@ -47,7 +47,6 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "F6AB251B301960180062F7C8"
             BuildableName = "SceneBox.app"
-            BlueprintName = "WatchBox"
             ReferencedContainer = "container:WatchBox.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

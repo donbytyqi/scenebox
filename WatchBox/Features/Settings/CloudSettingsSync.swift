@@ -5,10 +5,26 @@
 //  Created by SpontaneousArray on 04.08.26.
 //
 
+import CoreFoundation
 import Foundation
 import FirebaseFirestore
 import Observation
 
+/// Mirrors user settings to `users/{uid}/settings/apiKeys` so a second device
+/// picks up the same configuration after signing in.
+///
+/// Two kinds of setting are deliberately kept apart:
+///
+/// - **User intent** — debrid and metadata keys, Trakt session, stream
+///   selection, subtitle/audio languages, custom trackers. These are what make
+///   a new device usable without re-entering anything, so they sync.
+/// - **Device specifics** — streaming port, storage caps, peer count, Wi-Fi
+///   only, player buffer. Your phone should not inherit your Mac's disk limits
+///   or listening port, so these stay local.
+///
+/// The field list below is the single source of truth for what syncs. Reading,
+/// applying and the change-detection payload all derive from it, so a field
+/// cannot be added to one path and forgotten in another.
 @MainActor
 final class CloudSettingsSync {
     static let shared = CloudSettingsSync()
@@ -33,13 +49,15 @@ final class CloudSettingsSync {
 
         listener = document.addSnapshotListener { [weak self] snapshot, _ in
             guard let snapshot, !snapshot.metadata.hasPendingWrites else { return }
-            let remote = Remote(snapshot.data() ?? [:])
+            // Converted off the main actor into a Sendable form; the raw
+            // [String: Any] Firestore hands back cannot cross isolation.
+            let remote = Self.remoteValues(snapshot.data() ?? [:])
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                if !remote.isEmpty {
-                    self.apply(remote)
-                } else {
+                if remote.isEmpty {
                     self.schedulePush(debounce: false)
+                } else {
+                    self.apply(remote)
                 }
             }
         }
@@ -55,56 +73,33 @@ final class CloudSettingsSync {
         lastSyncedPayload = nil
     }
 
-    // MARK: Remote → local
-
-    private struct Remote: Sendable {
-        let debridAPIKeys: [String: String]?
-        let debridProvider: String?
-        let tmdbAPIKey: String?
-        let preferredSubtitleLanguage: String?
-        let preferredAudioLanguage: String?
-
-        init(_ data: [String: Any]) {
-            debridAPIKeys = data["debridAPIKeys"] as? [String: String]
-            debridProvider = data["debridProvider"] as? String
-            tmdbAPIKey = data["tmdbAPIKey"] as? String
-            preferredSubtitleLanguage = data["preferredSubtitleLanguage"] as? String
-            preferredAudioLanguage = data["preferredAudioLanguage"] as? String
+    /// Re-reads just the synced Trakt session, ignoring every other field.
+    ///
+    /// Trakt refresh tokens are single-use: when two devices refresh at once,
+    /// the loser is left holding a token the server has already invalidated.
+    /// This lets the loser adopt the winner's token instead of signing out.
+    /// Returns true when a session was found and applied.
+    @discardableResult
+    func pullTraktSession() async -> Bool {
+        guard let document else { return false }
+        guard let snapshot = try? await document.getDocument(), snapshot.exists else { return false }
+        let remote = Self.remoteValues(snapshot.data() ?? [:])
+        let trakt = remote.filter { $0.key.hasPrefix("trakt") }
+        guard !trakt.isEmpty else { return false }
+        for field in fields where field.key.hasPrefix("trakt") {
+            if let value = trakt[field.key] { field.apply(value) }
         }
-
-        var isEmpty: Bool {
-            debridAPIKeys == nil && debridProvider == nil && tmdbAPIKey == nil
-                && preferredSubtitleLanguage == nil && preferredAudioLanguage == nil
-        }
-        var payload: [String: Any] {
-            var out: [String: Any] = [:]
-            if let debridAPIKeys { out["debridAPIKeys"] = debridAPIKeys }
-            if let debridProvider { out["debridProvider"] = debridProvider }
-            if let tmdbAPIKey { out["tmdbAPIKey"] = tmdbAPIKey }
-            if let preferredSubtitleLanguage { out["preferredSubtitleLanguage"] = preferredSubtitleLanguage }
-            if let preferredAudioLanguage { out["preferredAudioLanguage"] = preferredAudioLanguage }
-            return out
-        }
+        lastSyncedPayload = currentPayload()
+        return true
     }
 
-    private func apply(_ remote: Remote) {
-        lastSyncedPayload = Self.normalize(remote.payload)
-        if let keys = remote.debridAPIKeys, keys != settings.debridAPIKeys {
-            settings.debridAPIKeys = keys
+    // MARK: Remote → local
+
+    private func apply(_ remote: [String: RemoteValue]) {
+        for field in fields {
+            if let value = remote[field.key] { field.apply(value) }
         }
-        if let raw = remote.debridProvider,
-           let provider = DebridProvider(rawValue: raw), provider != settings.debridProvider {
-            settings.debridProvider = provider
-        }
-        if let tmdb = remote.tmdbAPIKey, tmdb != settings.tmdbAPIKey {
-            settings.tmdbAPIKey = tmdb
-        }
-        if let subs = remote.preferredSubtitleLanguage, subs != settings.preferredSubtitleLanguage {
-            settings.preferredSubtitleLanguage = subs
-        }
-        if let audio = remote.preferredAudioLanguage, audio != settings.preferredAudioLanguage {
-            settings.preferredAudioLanguage = audio
-        }
+        lastSyncedPayload = currentPayload()
     }
 
     // MARK: Local → remote
@@ -117,11 +112,9 @@ final class CloudSettingsSync {
 
     private func observeOnce() {
         withObservationTracking {
-            _ = settings.debridAPIKeys
-            _ = settings.debridProvider
-            _ = settings.tmdbAPIKey
-            _ = settings.preferredSubtitleLanguage
-            _ = settings.preferredAudioLanguage
+            // Reading every synced field here is what registers the
+            // observation; a field absent from this loop would never push.
+            for field in fields { _ = field.local() }
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self, self.document != nil else { self?.observing = false; return }
@@ -142,26 +135,216 @@ final class CloudSettingsSync {
 
     private func pushLocal() {
         guard let document else { return }
-        let payload: [String: Any] = [
-            "debridAPIKeys": settings.debridAPIKeys,
-            "debridProvider": settings.debridProvider.rawValue,
-            "tmdbAPIKey": settings.tmdbAPIKey,
-            "preferredSubtitleLanguage": settings.preferredSubtitleLanguage,
-            "preferredAudioLanguage": settings.preferredAudioLanguage,
-        ]
-        let normalized = Self.normalize(payload)
-        guard !NSDictionary(dictionary: normalized).isEqual(to: lastSyncedPayload ?? [:]) else { return }
-        lastSyncedPayload = normalized
+        let payload = currentPayload()
+        guard !NSDictionary(dictionary: payload).isEqual(to: lastSyncedPayload ?? [:]) else { return }
+        lastSyncedPayload = payload
         document.setData(payload, merge: true)
     }
 
-    private static func normalize(_ data: [String: Any]) -> [String: Any] {
-        [
-            "debridAPIKeys": (data["debridAPIKeys"] as? [String: String]) ?? [:],
-            "debridProvider": (data["debridProvider"] as? String) ?? "",
-            "tmdbAPIKey": (data["tmdbAPIKey"] as? String) ?? "",
-            "preferredSubtitleLanguage": (data["preferredSubtitleLanguage"] as? String) ?? "",
-            "preferredAudioLanguage": (data["preferredAudioLanguage"] as? String) ?? "",
+    private func currentPayload() -> [String: Any] {
+        var out: [String: Any] = [:]
+        for field in fields {
+            if let value = field.local() { out[field.key] = value.firestoreValue }
+        }
+        return out
+    }
+
+    // MARK: Synced fields
+
+    /// One synced setting: how to read it locally and how to write a remote
+    /// value back. Both are expressed in `RemoteValue` so the field list stays
+    /// Sendable-safe and comparable.
+    private struct SyncedField {
+        let key: String
+        let local: () -> RemoteValue?
+        let apply: (RemoteValue) -> Void
+    }
+
+    private var fields: [SyncedField] {
+        let settings = self.settings
+
+        func string(
+            _ key: String,
+            _ read: @escaping () -> String,
+            _ write: @escaping (String) -> Void
+        ) -> SyncedField {
+            SyncedField(key: key,
+                        local: { .string(read()) },
+                        apply: { if case .string(let value) = $0 { write(value) } })
+        }
+
+        func flag(
+            _ key: String,
+            _ read: @escaping () -> Bool,
+            _ write: @escaping (Bool) -> Void
+        ) -> SyncedField {
+            SyncedField(key: key,
+                        local: { .bool(read()) },
+                        apply: { if case .bool(let value) = $0 { write(value) } })
+        }
+
+        func number(
+            _ key: String,
+            _ read: @escaping () -> Double,
+            _ write: @escaping (Double) -> Void
+        ) -> SyncedField {
+            SyncedField(key: key,
+                        local: { .number(read()) },
+                        apply: { if case .number(let value) = $0 { write(value) } })
+        }
+
+        func stringMap(
+            _ key: String,
+            _ read: @escaping () -> [String: String],
+            _ write: @escaping ([String: String]) -> Void
+        ) -> SyncedField {
+            SyncedField(key: key,
+                        local: { .stringMap(read()) },
+                        apply: { if case .stringMap(let value) = $0 { write(value) } })
+        }
+
+        /// Sets are sorted on the way out. Without this the iteration order
+        /// varies per launch, so the change-detection comparison would see a
+        /// difference and push on every start.
+        func stringSet(
+            _ key: String,
+            _ read: @escaping () -> [String],
+            _ write: @escaping ([String]) -> Void
+        ) -> SyncedField {
+            SyncedField(key: key,
+                        local: { .strings(read().sorted()) },
+                        apply: { if case .strings(let value) = $0 { write(value) } })
+        }
+
+        return [
+            // MARK: Keys and accounts
+            stringMap("debridAPIKeys",
+                      { settings.debridAPIKeys },
+                      { settings.debridAPIKeys = $0 }),
+            string("debridProvider",
+                   { settings.debridProvider.rawValue },
+                   { if let provider = DebridProvider(rawValue: $0) { settings.debridProvider = provider } }),
+            string("tmdbAPIKey",
+                   { settings.tmdbAPIKey },
+                   { settings.tmdbAPIKey = $0 }),
+            string("omdbAPIKey",
+                   { settings.omdbAPIKey },
+                   { settings.omdbAPIKey = $0 }),
+
+            // MARK: Trakt session
+            // Synced so a second device is already signed in. Refresh tokens
+            // rotate, so `pullTraktSession()` exists to re-sync after a race.
+            string("traktAccessToken",
+                   { settings.traktAccessToken },
+                   { settings.traktAccessToken = $0 }),
+            string("traktRefreshToken",
+                   { settings.traktRefreshToken },
+                   { settings.traktRefreshToken = $0 }),
+            number("traktTokenExpiry",
+                   { settings.traktTokenExpiry },
+                   { settings.traktTokenExpiry = $0 }),
+            string("traktUsername",
+                   { settings.traktUsername },
+                   { settings.traktUsername = $0 }),
+            flag("traktSyncEnabled",
+                 { settings.traktSyncEnabled },
+                 { settings.traktSyncEnabled = $0 }),
+            string("traktBackfillUsername",
+                   { settings.traktBackfillUsername },
+                   { settings.traktBackfillUsername = $0 }),
+
+            // MARK: Stream selection
+            string("releaseSort",
+                   { settings.releaseSort.rawValue },
+                   { if let sort = ReleaseSort(rawValue: $0) { settings.releaseSort = sort } }),
+            string("preferredResolution",
+                   { settings.preferredResolution },
+                   { settings.preferredResolution = $0 }),
+            stringSet("excludedQualities",
+                      { settings.excludedQualities.map(\.rawValue) },
+                      { settings.excludedQualities = Set($0.compactMap(QualityFilter.init(rawValue:))) }),
+            stringSet("enabledSources",
+                      { settings.enabledSources.map(\.rawValue) },
+                      { settings.enabledSources = Set($0.compactMap(StreamProvider.init(rawValue:))) }),
+            flag("autoSelectSource",
+                 { settings.autoSelectSource },
+                 { settings.autoSelectSource = $0 }),
+            flag("extraSourceProviders",
+                 { settings.extraSourceProviders },
+                 { settings.extraSourceProviders = $0 }),
+            flag("shareDebridKeyWithCommunitySources",
+                 { settings.shareDebridKeyWithCommunitySources },
+                 { settings.shareDebridKeyWithCommunitySources = $0 }),
+            string("stremthruHost",
+                   { settings.stremthruHost },
+                   { settings.stremthruHost = $0 }),
+
+            // MARK: Playback and network preferences
+            string("preferredSubtitleLanguage",
+                   { settings.preferredSubtitleLanguage },
+                   { settings.preferredSubtitleLanguage = $0 }),
+            string("preferredAudioLanguage",
+                   { settings.preferredAudioLanguage },
+                   { settings.preferredAudioLanguage = $0 }),
+            number("subtitleScale",
+                   { settings.subtitleScale },
+                   { settings.subtitleScale = $0 }),
+            string("customTrackers",
+                   { settings.customTrackers },
+                   { settings.customTrackers = $0 }),
         ]
+    }
+
+    // MARK: Wire values
+
+    /// A Firestore value reduced to the handful of shapes these settings use,
+    /// so it can cross an isolation boundary and be matched by type on arrival.
+    ///
+    /// `nonisolated` because the project's default actor isolation would
+    /// otherwise make this type main-actor bound, and it has to be built on
+    /// Firestore's listener queue.
+    private nonisolated enum RemoteValue: Sendable {
+        case string(String)
+        case bool(Bool)
+        case number(Double)
+        case strings([String])
+        case stringMap([String: String])
+
+        init?(_ value: Any) {
+            switch value {
+            case let value as String:
+                self = .string(value)
+            case let value as [String]:
+                self = .strings(value)
+            case let value as [String: String]:
+                self = .stringMap(value)
+            case let value as NSNumber:
+                // `as? Bool` succeeds for any NSNumber, so the CoreFoundation
+                // type is the only reliable way to tell a boolean from a
+                // number. Getting this wrong silently drops the field, because
+                // a `.number` never matches a flag's `.bool` case.
+                if CFGetTypeID(value) == CFBooleanGetTypeID() {
+                    self = .bool(value.boolValue)
+                } else {
+                    self = .number(value.doubleValue)
+                }
+            default:
+                return nil
+            }
+        }
+
+        var firestoreValue: Any {
+            switch self {
+            case .string(let value): value
+            case .bool(let value): value
+            case .number(let value): value
+            case .strings(let value): value
+            case .stringMap(let value): value
+            }
+        }
+    }
+
+    nonisolated private static func remoteValues(_ data: [String: Any]) -> [String: RemoteValue] {
+        data.compactMapValues(RemoteValue.init)
     }
 }

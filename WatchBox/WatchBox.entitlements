@@ -10,6 +10,12 @@
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
+	<!-- Importing a GoogleService-Info.plist through the file picker. A sandboxed
+	     app cannot read a user-chosen file without this: the open panel still
+	     appears, but the returned URL is unreadable, so the import silently did
+	     nothing no matter how many times the file was tapped. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
 	<!-- Firebase Auth persists the signed-in user in the Keychain; on macOS it
 	     needs an explicit access group or every sign-in fails (errSecMissingEntitlement). -->
 	<key>keychain-access-groups</key>

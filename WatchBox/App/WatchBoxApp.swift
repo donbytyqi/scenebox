@@ -8,7 +8,6 @@
 import SwiftUI
 import SwiftVLC
 import Kingfisher
-import FirebaseCore
 
 @main
 struct WatchBoxApp: App {
@@ -17,7 +16,12 @@ struct WatchBoxApp: App {
     #endif
 
     init() {
-        FirebaseApp.configure()
+        // Configures Firebase from an imported plist if there is one, then a
+        // bundled one, and otherwise leaves the app in guest/local mode instead
+        // of trapping. `FirebaseApp.configure()` on its own calls `fatalError`
+        // when no plist is present, which made the app unlaunchable before the
+        // user had any way to supply one.
+        _ = FirebaseConfigStore.shared
 
         Self.configureImageCache()
 

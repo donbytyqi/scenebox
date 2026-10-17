@@ -8,7 +8,7 @@
 import Foundation
 
 struct DownloadRecord: Codable, Identifiable, Sendable, Hashable {
-    let id: String              // info-hash hex — also the folder name
+    let id: String              // info-hash hex plus file index, also the folder name
     var title: String           // "Inception"
     var releaseName: String     // "YTS 1080p BluRay"
     var mediaID: String         // IMDb id, for navigating back to the detail screen

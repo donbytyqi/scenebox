@@ -17,6 +17,7 @@ final class MediaDetailModel {
 
     private(set) var detail: MediaDetail?
     private(set) var castMembers: [CastMember] = []
+    private(set) var ratings: MediaRatings?
     private(set) var originalLanguage: String?
     private(set) var similar: [MediaResult] = []
     private(set) var isLoading = false
@@ -86,7 +87,8 @@ final class MediaDetailModel {
 
                 async let cast: Void = loadCast(for: fetched)
                 async let related: Void = loadSimilar(for: fetched)
-                _ = await (cast, related)
+                async let scores: Void = loadRatings(for: fetched)
+                _ = await (cast, related, scores)
             } catch {
                 guard !Task.isCancelled else { return }
                 errorMessage = error.localizedDescription
@@ -104,6 +106,14 @@ final class MediaDetailModel {
         guard !Task.isCancelled else { return }
         castMembers = cast
         originalLanguage = code
+    }
+
+    private func loadRatings(for detail: MediaDetail) async {
+        guard detail.id.hasPrefix("tt"),
+              let omdb = OMDbClient(key: settings.omdbAPIKey),
+              let fetched = await omdb.ratings(imdbID: detail.id) else { return }
+        guard !Task.isCancelled else { return }
+        ratings = fetched
     }
 
     private func loadSimilar(for detail: MediaDetail) async {

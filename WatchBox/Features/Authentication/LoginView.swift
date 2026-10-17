@@ -15,6 +15,7 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var isCreating = false
+    @State private var config = FirebaseConfigStore.shared
 
     private var canSubmit: Bool {
         !auth.isWorking && !email.isEmpty && password.count >= 6
@@ -24,17 +25,11 @@ struct LoginView: View {
         ZStack {
             Theme.background.ignoresSafeArea()
 
-            VStack(spacing: 18) {
-                header
-                fields
-                submitButton
-                switchModeButton
-                if !isSheet {
-                    guestButton
-                }
+            if config.isConfigured {
+                signInForm
+            } else {
+                setupGuide
             }
-            .frame(maxWidth: 460)
-            .padding(.horizontal, 24)
 
             if isSheet {
                 VStack {
@@ -55,6 +50,32 @@ struct LoginView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(auth.errorMessage ?? "")
+        }
+    }
+
+    private var signInForm: some View {
+        VStack(spacing: 18) {
+            header
+            fields
+            submitButton
+            switchModeButton
+            if !isSheet {
+                guestButton
+            }
+        }
+        .frame(maxWidth: 460)
+        .padding(.horizontal, 24)
+    }
+
+    /// Without a Firebase project there is nothing to sign in to, so this screen
+    /// becomes the guide for supplying one — with guest mode still reachable.
+    private var setupGuide: some View {
+        VStack(spacing: 0) {
+            FirebaseSetupView()
+            if !isSheet {
+                guestButton
+                    .padding(.bottom, 24)
+            }
         }
     }
 

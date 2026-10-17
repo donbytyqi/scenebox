@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D71B70E0D71B70E0D71B7014 /* KeychainShim in Embed Frameworks */ = {isa = PBXBuildFile; platformFilters = (maccatalyst, ); productRef = D71B70E0D71B70E0D71B7011 /* KeychainShim */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		D71B70E0D71B70E0D71B7010 /* KeychainShim in Frameworks */ = {isa = PBXBuildFile; platformFilters = (maccatalyst, ); productRef = D71B70E0D71B70E0D71B7011 /* KeychainShim */; };
 		D71B70E0D71B70E0D71B7002 /* LibTorrentEngine.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D71B70E0D71B70E0D71B7001 /* LibTorrentEngine.xcframework */; };
 		F6AB252C301961100062F7C8 /* SwiftVLC in Frameworks */ = {isa = PBXBuildFile; productRef = F6AB252B301961100062F7C8 /* SwiftVLC */; };
 		F6AB257A30197C7F0062F7C8 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = F6AB257930197C7F0062F7C8 /* Kingfisher */; };
@@ -45,6 +47,20 @@
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		D71B70E0D71B70E0D71B7013 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				D71B70E0D71B70E0D71B7014 /* KeychainShim in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		F6AB2519301960180062F7C8 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -53,6 +69,7 @@
 				F6AB257A30197C7F0062F7C8 /* Kingfisher in Frameworks */,
 				F6AB3B96301E679A0062F7C8 /* FirebaseCore in Frameworks */,
 				F6AB252C301961100062F7C8 /* SwiftVLC in Frameworks */,
+				D71B70E0D71B70E0D71B7010 /* KeychainShim in Frameworks */,
 				F6AB3B92301E679A0062F7C8 /* FirebaseAnalytics in Frameworks */,
 				F6AB3B94301E679A0062F7C8 /* FirebaseAuth in Frameworks */,
 				F6AB3B98301E679A0062F7C8 /* FirebaseFirestore in Frameworks */,
@@ -92,6 +109,7 @@
 				F6AB2518301960180062F7C8 /* Sources */,
 				F6AB2519301960180062F7C8 /* Frameworks */,
 				F6AB251A301960180062F7C8 /* Resources */,
+				D71B70E0D71B70E0D71B7013 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -103,6 +121,7 @@
 			name = WatchBox;
 			packageProductDependencies = (
 				F6AB252B301961100062F7C8 /* SwiftVLC */,
+				D71B70E0D71B70E0D71B7011 /* KeychainShim */,
 				F6AB257930197C7F0062F7C8 /* Kingfisher */,
 				F6AB3B91301E679A0062F7C8 /* FirebaseAnalytics */,
 				F6AB3B93301E679A0062F7C8 /* FirebaseAuth */,
@@ -142,6 +161,7 @@
 				F6AB252A301961100062F7C8 /* XCRemoteSwiftPackageReference "SwiftVLC" */,
 				F6AB257830197C7F0062F7C8 /* XCRemoteSwiftPackageReference "Kingfisher" */,
 				F6AB3B90301E679A0062F7C8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				D71B70E0D71B70E0D71B7012 /* XCLocalSwiftPackageReference "Vendor/KeychainShim" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F6AB251D301960180062F7C8 /* Products */;
@@ -210,7 +230,6 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = 37QC2MJDWB;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -274,7 +293,6 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = 37QC2MJDWB;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -304,9 +322,8 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = WatchBox/WatchBox.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
-				DEVELOPMENT_TEAM = 37QC2MJDWB;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_PREVIEWS = YES;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=appletvos*]" = "*.storyboard";
@@ -337,7 +354,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.0.4;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -369,9 +386,8 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = WatchBox/WatchBox.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER = NO;
-				DEVELOPMENT_TEAM = 37QC2MJDWB;
 				"ENABLE_HARDENED_RUNTIME[sdk=macosx*]" = YES;
 				ENABLE_PREVIEWS = YES;
 				"EXCLUDED_SOURCE_FILE_NAMES[sdk=appletvos*]" = "*.storyboard";
@@ -402,7 +418,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.0.4;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -449,6 +465,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		D71B70E0D71B70E0D71B7012 /* XCLocalSwiftPackageReference "Vendor/KeychainShim" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Vendor/KeychainShim;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		F6AB252A301961100062F7C8 /* XCRemoteSwiftPackageReference "SwiftVLC" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -477,6 +500,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		D71B70E0D71B70E0D71B7011 /* KeychainShim */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KeychainShim;
+		};
 		F6AB252B301961100062F7C8 /* SwiftVLC */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F6AB252A301961100062F7C8 /* XCRemoteSwiftPackageReference "SwiftVLC" */;

@@ -73,8 +73,7 @@ public actor TMDBClient {
     private func get(_ path: String) async -> [String: Any]? {
         guard var comps = URLComponents(string: "\(base)\(path)") else { return nil }
         comps.queryItems = (comps.queryItems ?? []) + [URLQueryItem(name: "api_key", value: key)]
-        guard let url = comps.url,
-              let (data, _) = try? await URLSession.shared.data(from: url) else { return nil }
-        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard let url = comps.url else { return nil }
+        return (try? await HTTP.get(url))?.object
     }
 }

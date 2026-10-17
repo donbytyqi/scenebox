@@ -11,6 +11,7 @@ struct LibraryView: View {
     private enum Section: String, CaseIterable, Identifiable {
         case downloads = "Downloads"
         case watchlist = "Watchlist"
+        case trakt = "Trakt"
         var id: String { rawValue }
     }
 
@@ -44,6 +45,9 @@ struct LibraryView: View {
             .background(Theme.background)
             .pageTitle("Library")
             .mediaNavigationDestinations()
+            .navigationDestination(for: TraktListSummary.self) { list in
+                TraktListItemsView(list: list)
+            }
         }
     }
 
@@ -59,6 +63,7 @@ struct LibraryView: View {
         switch section {
         case .downloads: DownloadsView()
         case .watchlist: WatchlistSection()
+        case .trakt: TraktLibrarySection()
         }
     }
 

@@ -142,6 +142,7 @@ struct MediaDetailView: View {
                 fallbackTitle: fallbackTitle,
                 isBusy: streamer.isPreparing,
                 cast: model.castMembers,
+                ratings: model.ratings,
                 selectedSeason: Binding(get: { model.selectedSeason },
                                         set: { model.selectedSeason = $0 }),
                 resumeEpisode: resumeEpisode(for: detail),
@@ -407,7 +408,8 @@ struct MediaDetailView: View {
         let progressContext = WatchProgressContext(
             mediaID: mediaID, mediaType: type, title: name,
             posterURL: detail?.posterURL,
-            season: episode?.season, episode: episode?.episode, episodeID: episode?.id)
+            season: episode?.season, episode: episode?.episode, episodeID: episode?.id,
+            source: WatchSource(stream: stream))
 
         if stream.isDebrid, let url = stream.url {
             streamer.playDebrid(url: url, title: label, backdropURL: backdrop, logoURL: logo,
@@ -515,9 +517,7 @@ struct MediaDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    if let rating = detail.imdbRating {
-                        Chip(text: String(format: "%.1f", rating), systemImage: "star.fill", tint: .yellow)
-                    }
+                    RatingChips(ratings: model.ratings, fallbackIMDb: detail.imdbRating)
                     if let runtime = detail.runtime {
                         Chip(text: runtime, systemImage: "clock")
                     }
